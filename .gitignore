@@ -5,5 +5,5 @@
 *.png
 *.jpg
 *.jpeg
-ipynb-checkpoints/
+.ipynb_checkpoints/
 data/

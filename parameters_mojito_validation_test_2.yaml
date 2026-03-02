@@ -1,0 +1,141 @@
+mojito:
+    # testing or production; this doesn't do anything yet but it seems like something that would be good to have
+  run_type: 'testing'
+
+    ### TIMING ###
+    # for a full discussion, see lisasim/Timing/timing.ipynb
+
+    ## input parameters ##
+  dt: 0.25
+  t_dltt_orbits: 10.
+  dt_orbits: 500000
+  t_strain_offset: 550.
+  n_trim_lolipops: 1000
+  n_orbit_buffer: 10
+  window_jaxgbresponse: 0.5
+  l01_chunks_duration: 1296000.0   # L01 chunk of 15 days
+  oemorbits: "esa-trailing"
+
+    ## derived parameters ##
+    # leave these blank in the template
+  t0_orbits: 61171239.327664
+  size_l1: 252465200
+  size_l0: 252467200
+  size_strain: 252471600
+  size_orbits: 274
+  t0_l0: 97729639.327664
+  t_init: 97729089.327664
+
+
+    ### FILE PATHS###
+  orbits_file_path: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/spacecraft/esa-trailing-orbits-mojito_validation_test_2.h5
+  ground_track_file_path: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/spacecraft/groundtrack-mojito_validation_test_2.h5
+  create_spacecraft_files: true
+
+  data_output_dir: '/scratch/project_2004833/common_data/mojito/brickmarket'
+
+    # format: mojito_YYYMMDD_id where id is an optional identifier if you do multiple runs in a day
+    # leave it blank and it will be automatically generated when run
+  data_run_tag: 'mojito_validation_test_2'
+
+    # the combined file of all the L1 source data
+  l1_output_filename: 'mojito_lite'
+
+    # want to add extra stuff to the catalogues?
+  process_catalogues: true
+
+    # this lists all L0 output files for the Lolipops pipeline to reference
+  l0_output_list: 'l0_output_list.yaml'
+
+    # this lists all L1 files for the combiner to reference later
+  l1_output_list: 'l1_output_list.yaml'
+
+    # output a file called "{source_type}_benchmark_{timestamp}.txt" with timing data
+  benchmark: 'benchmarking'
+
+    # it can be helpful to generate the L1 data within the source containers themselves for testing
+    # turn off for production
+  generate_l1_at_source: true
+
+GB:
+  catalogue_path: '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/catalogues/wdwd_cat_mojito_lite_processed.hdf5'
+
+  ngbs:
+
+
+  l0_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/GB/L0
+  l1_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/GB/L1
+MBHB:
+  catalogue_path: '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/catalogues/mbhb_cat_mojito_lite_processed.hdf5'
+
+  approximant: 'IMRPhenomTPHM'
+  aligned_spins: true
+  upsample: false
+  resp_n_chunks: 20
+  wf_n_chunks: 10
+
+  l0_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/MBHB/L0
+  l1_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/MBHB/L1
+EMRI:
+  catalogue_path: '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/catalogues/emri_cat_mojito_lite_processed.hdf5'
+
+  waveform_model: 'Kerr'
+  aligned_spins: true
+  upsample: false
+  n_chunks: 20
+  T_smooth: 0.0
+  dense_stepping: 0   # sparsely sampled trajectory
+  max_init_len: 1e8   # length of trajectories well under 1000
+  pad_output: 0
+  mode_selection_threshold: 0.0
+
+  l0_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/EMRI/L0
+  l1_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/EMRI/L1
+SOBHB:
+  catalogue_path: '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/catalogues/sobhb_cat_mojito_lite_processed.hdf5'
+
+  n_chunks: 10
+
+  l0_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/SOBHB/L0
+  l1_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/SOBHB/L1
+VGB:
+  catalogue_path: '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/catalogues/vgb_cat_mojito_lite_processed.hdf5'
+
+  ngbs:
+
+
+  l0_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/VGB/L0
+  l1_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/VGB/L1
+INSTRUMENT:
+  base_params_path: '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/config/instrument_parameters_mojito_validation_test_2.yaml'
+  seed: 1
+  instru_chunk_size: 500000
+  num_chunks: 3
+  num_workers: 4
+
+  lolipops_chunk_size: 15
+
+
+  l0_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/INSTRUMENT/L0/extprec
+  l1_output_directory: 
+    /scratch/project_2004833/common_data/mojito/brickmarket/mojito_validation_test_2/data/INSTRUMENT/L1/extprec
+L0L1:
+  param1:
+  param2:
+
+COMBINE:
+  param1:
+  param2:
