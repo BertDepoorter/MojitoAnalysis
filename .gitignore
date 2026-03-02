@@ -1,0 +1,9 @@
+*.h5
+*.npz
+*.npy
+*.pdf
+*.png
+*.jpg
+*.jpeg
+ipynb-checkpoints/
+data/
