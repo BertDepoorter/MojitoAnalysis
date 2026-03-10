@@ -2,7 +2,6 @@
 *.npz
 *.npy
 *.pdf
-*.png
 *.jpg
 *.jpeg
 .ipynb_checkpoints/
