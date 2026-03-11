@@ -376,7 +376,7 @@ def mismatch(s1, s2, invC):
     return 1 - match(s1, s2, invC)
 
 
-def run_for_source(source_index):
+def run_for_source(source_index, waveform=None, invC_stable=None):
     pattern = os.path.join(scratch, f'EMRI_731d_2.5s_L1_source{source_index}_*.h5')
     files = glob.glob(pattern)
     if not files:
@@ -421,16 +421,16 @@ def run_for_source(source_index):
     use_gpu = True
     mode_selection_threshold = 0.0
     home_folder = os.getcwd()
-    # if initialize_waveform:
-    emri_waveform = EMRIWave_base(
-            use_gpu=use_gpu,
-            mode_selection_threshold=mode_selection_threshold,
-            t0_orbits=t0_orbits,
-            t_init=t_init,
-            dt=dt,
-            n_samples=n_samples,
-            offset=offset,
-        )
+    if waveform==None:
+        emri_waveform = EMRIWave_base(
+                use_gpu=use_gpu,
+                mode_selection_threshold=mode_selection_threshold,
+                t0_orbits=t0_orbits,
+                t_init=t_init,
+                dt=dt,
+                n_samples=n_samples,
+                offset=offset,
+            )
         # initialize_waveform = False
 
     params = get_source_params(
@@ -695,12 +695,12 @@ def run_for_source(source_index):
                 axs[i, j].grid(True, which='both')
         pdf.savefig(fig)
         plt.close(fig)
-
-        covariance_matrices_stable, invC_stable = stabilize_covariance_for_inversion(
-            covariance_matrices,
-            psd_floor=1e-45,
-            smooth_window_logfreq=15,
-        )
+        if invC_stable is None:
+            covariance_matrices_stable, invC_stable = stabilize_covariance_for_inversion(
+                covariance_matrices,
+                psd_floor=1e-45,
+                smooth_window_logfreq=15,
+            )
 
         pre_fact = 2 * dt / N_t
         invC_for_ip = pre_fact * invC_stable
@@ -745,7 +745,7 @@ def run_for_source(source_index):
         'SNR_template': float(np.real(snr_wf)),
         'SNR_residual': float(np.real(snr_residual)),
         'mismatch_data_template': float(np.real(mismatch_data)),
-    }
+    }, emri_waveform, cov_inv
 
 
 if __name__ == '__main__':
@@ -753,18 +753,33 @@ if __name__ == '__main__':
 
     results = []
     for source_index in range(8):
-        try:
-            results.append(run_for_source(source_index))
-        except Exception as err:
-            print(f"Source {source_index} failed: {err}")
-            results.append({
-                'source_index': source_index,
-                'pdf_path': '',
-                'SNR_data': np.nan,
-                'SNR_template': np.nan,
-                'SNR_residual': np.nan,
-                'mismatch_data_template': np.nan,
-            })
+        if source_index == 0:
+            try:
+                results, emri_waveform, invC = run_for_source(source_index)
+            except Exception as err:
+                print(f"Source {source_index} failed: {err}")
+                results.append({
+                    'source_index': source_index,
+                    'pdf_path': '',
+                    'SNR_data': np.nan,
+                    'SNR_template': np.nan,
+                    'SNR_residual': np.nan,
+                    'mismatch_data_template': np.nan,
+                })
+        else:
+            try:
+                run_for_source(source_index, waveform=emri_waveform, invC_stable=invC)
+                results.append(run_for_source(source_index))
+            except Exception as err:
+                print(f"Source {source_index} failed: {err}")
+                results.append({
+                    'source_index': source_index,
+                    'pdf_path': '',
+                    'SNR_data': np.nan,
+                    'SNR_template': np.nan,
+                    'SNR_residual': np.nan,
+                    'mismatch_data_template': np.nan,
+                })
 
     summary_df = pd.DataFrame(results).sort_values('source_index').reset_index(drop=True)
     print("\n=== EMRI Validation Summary ===")
