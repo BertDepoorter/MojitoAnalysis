@@ -449,10 +449,10 @@ def run_for_source(source_index):
     params_mojito = [
         params['PrimaryMassSSBFrame'],
         params['SecondaryMassSSBFrame'],
-        params['PrimarySpinParameter'] * np.sign(np.cos(params['InclinationAngle'])),
+        params['PrimarySpinParameter'], # * np.sign(np.cos(params['InclinationAngle'])),
         params['SemiLatusRectum'],
         params['Eccentricity'],
-        np.abs(np.cos(params['InclinationAngle'])),
+        np.cos(params['InclinationAngle']),
         params['LuminosityDistance'] * 1e-3,
         qS_ecl,
         phiS_ecl,
