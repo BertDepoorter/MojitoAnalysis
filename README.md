@@ -11,6 +11,9 @@ If you want to build the container:
 apptainer registry login -u <username> docker://gitlab.esa.int:4567
 # Here you should authenticate with personal access token
 
+# Optional: reset env variable for apptainer build to large storage
+export APPTAINER_CACHEDIR=/scratch/project_2004833/depoorter/.apptainer_cache
+
 # build .sif image
 apptainer build --fakeroot lisa_env.sif lisa_env.def
 ```
