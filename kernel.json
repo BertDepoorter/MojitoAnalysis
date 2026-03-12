@@ -1,0 +1,25 @@
+{
+    "argv": [
+     "/usr/bin/apptainer",
+     "exec",
+     "--writable-tmpfs",
+     "--bind",
+     "/scratch/project_2004833/common_data:/mnt/data",
+     "--bind",
+     "/scratch/project_2004833:/scratch/project_2004833",
+     "--home",
+     "/scratch/project_2004833/common_data/simdata/EMRI/tmp",
+     "--nv",
+     "/scratch/project_2004833/depoorter/MojitoAnalysis/lisa_env.sif",
+     "python",
+     "-m",
+     "ipykernel_launcher",
+     "-f",
+     "{connection_file}"
+    ],
+    "display_name": "emri analysis kernel",
+    "language": "python",
+    "metadata": {
+     "debugger": true
+    }
+   }

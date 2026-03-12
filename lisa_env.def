@@ -28,7 +28,10 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-emr
         eryn tqdm lisaconstants "lisaorbits>=3.0.0" \
         corner arviz pesummary \
         setuptools_scm
-
+    
+    # bypass some security feature
+    git config --global --add safe.directory '*'
+    
     # 4. Source Builds (Order is critical)
     mkdir -p /build
     cd /build

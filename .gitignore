@@ -5,4 +5,5 @@
 *.jpg
 *.jpeg
 .ipynb_checkpoints/
+.env
 data/
