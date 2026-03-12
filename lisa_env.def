@@ -1,0 +1,155 @@
+Last login: Wed Mar 11 17:48:37 on ttys000
+(base) bertd@bertd-1 ~ % ssh manneback
+Connection closed by UNKNOWN port 65535
+(base) bertd@bertd-1 ~ % eval `ssh-agent`
+Agent pid 48287
+(base) bertd@bertd-1 ~ % ssh-add -D
+All identities removed.
+(base) bertd@bertd-1 ~ % ssh-add -k  /Users/bertd/.ssh/id_rsa.ceci
+Enter passphrase for /Users/bertd/.ssh/id_rsa.ceci: 
+Identity added: /Users/bertd/.ssh/id_rsa.ceci (bertd@bertd-1.oma.be)
+(base) bertd@bertd-1 ~ % ssh manneback
+Last login: Wed Mar 11 13:31:20 2026 from 130.104.2.134
+Welcome to
+                                        |                   |    
+  __ `__ \    _` |  __ \   __ \    _ \  __ \    _` |   __|  |  / 
+  |   |   |  (   |  |   |  |   |   __/  |   |  (   |  (       <  
+ _|  _|  _| \__,_| _|  _| _|  _| \___| _.__/  \__,_| \___| _|\_\ 
+ 
+                   High throuput CISM cluster 
+
+   front-end:  2x8Core E5-2667v3@3.20GHz(Haswell)/128GB RAM
+                  200+ nodes, 20+ GPUs
+
+     contact, support : egs-cism@listes.uclouvain.be
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  http://www.uclouvain.be/cism    http://www.ceci-hpc.be
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+CÉCI clusters:  Lyra - Lemaitre4 - NIC5 - Hercules2 - Dragon2
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+4981/12580 CPUs available (load 59%) - 812 jobs running, 787 pending. 
+
+* Job info for user bdepoort: 0 job running, 0 pending.
+* Diskquotas for user bdepoort
+Filesystem           used      limit      files      limit
+$HOME               16.5G       100G         86           
+$GLOBALSCRATCH        512        10T          1           
+$CECIHOME           809.0     100.0G          3     100000
+* Account expiration: 2026-08-10
+
+   Don't know where to start? 
+            --> https://www.ceci-hpc.be/install_software.html
+            --> https://www.ceci-hpc.be/slurm_tutorial.html
+[bdepoort@mbackf2 ~]$ pwd
+/home/ucl/cp3/bdepoort
+[bdepoort@mbackf2 ~]$ ls
+LISA
+[bdepoort@mbackf2 ~]$ cd LISA/
+[bdepoort@mbackf2 LISA]$ ls
+container
+[bdepoort@mbackf2 LISA]$ cd container/
+[bdepoort@mbackf2 container]$ kls
+-bash: kls: command not found
+[bdepoort@mbackf2 container]$ ls
+PE_env.def  fastlisaresponse_container
+[bdepoort@mbackf2 container]$ cd fastlisaresponse_container/
+[bdepoort@mbackf2 fastlisaresponse_container]$ ls
+Dockerfile  lisa_env.def  lisa_env.sif  minimal_slurm.sh  slurm-2993391.out  test.py
+[bdepoort@mbackf2 fastlisaresponse_container]$ vim lisa_env.def
+[bdepoort@mbackf2 fastlisaresponse_container]$ vim lisa_env.def
+
+Bootstrap: docker
+From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu-arm64
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+    export CUDA_HOME=/usr/local/cuda
+    export PATH=${CUDA_HOME}/bin:${PATH}
+    export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+    # Help CMake find the CUDA compiler
+    export CUDACXX=${CUDA_HOME}/bin/nvcc
+
+%post
+    # 1. Install System Compilers, LAPACKE, and pybind11 dev headers
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ gfortran \
+        liblapack-dev liblapacke-dev libblas-dev \
+        pkg-config cmake git wget \
+        pybind11-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+    # 2. Upgrade Python Tools
+    python3 -m pip install --no-cache-dir --upgrade \
+        pip setuptools wheel setuptools_scm scikit-build-core pybind11
+
+    # 3. Install core Python dependencies
+    python3 -m pip install --no-cache-dir \
+        numpy scipy pandas matplotlib \
+        eryn tqdm lisaconstants "lisaorbits>=3.0.0" \
+        corner arviz pesummary \
+        cupy-cuda12x ipykernel setuptools_scm\
+        fastemriwaveforms==2.0.0
+
+
+    # 4. Source Builds (Order is critical)
+    mkdir -p /build
+    cd /build
+
+    # Define environment variables for the build process
+    export CUDA_HOME=/usr/local/cuda
+    export CUDACXX=/usr/local/cuda/bin/nvcc
+    export PATH=${CUDA_HOME}/bin:${PATH}
+
+    # Install packages from source
+    # GPUBackendTools (spline) ---
+    git clone https://github.com/mikekatz04/GPUBackendTools.git
+    cd GPUBackendTools
+    git checkout spline
+    # We use --no-build-isolation to ensure it uses the system numpy/etc.
+    python3 -m pip install . --no-build-isolation
+    cd /build
+
+    # LISAanalysistools (lisa_on_fly) ---
+    git clone https://github.com/mikekatz04/LISAanalysistools.git
+    cd LISAanalysistools
+    git checkout lisa_on_fly
+    python3 -m pip install . --no-build-isolation
+    cd /build
+
+     # lisa-on-gpu / fastlisaresponse (tdi_on_fly) ---
+    git clone https://github.com/mikekatz04/lisa-on-gpu.git
+    cd lisa-on-gpu
+    git checkout tdi_on_fly
+
+    # CRITICAL FIX: Set env vars so CMake sees CUDA and the GBT headers
+    export CUDA_HOME=/usr/local/cuda
+    export CUDACXX=/usr/local/cuda/bin/nvcc
+
+    # Use --no-build-isolation so it finds the GPUBackendTools we just installed
+    python3 -m pip install . --no-build-isolation
+    cd /build
+
+    # 6. Verify Backend Logic
+    echo "Verifying CUDA 12x Backend detection..."
+    python3 -c '
+import few
+import cupy
+try:
+    # Check if the backend is registered in FEW
+    cuda12_avail = few.has_backend("cuda12x")
+    print(f" - FEW cuda12x backend registered: {cuda12_avail}")
+    
+    # Check if CuPy can actually see the CUDA runtime
+    print(f" - CuPy runtime version: {cupy.cuda.runtime.runtimeGetVersion()}")
+except Exception as e:
+    print(f" - Backend check encountered an issue: {e}")
+'
+
+    # 7. Execute Unit Tests via Module
+    echo "Running FEW test suite..."
+    # Note: If the build node lacks a GPU, tests requiring hardware will be skipped.
+    python3 -m few.tests
+
+%runscript
+    exec python3 "$@"
