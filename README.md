@@ -7,6 +7,9 @@ The relevant notebook is `FLR_sim.ipynb`. This should be understandable for othe
 To reproduce the code: I have added a lisa_env.def script which contains everything needed: pip installable packages and source installations.
 If you want to build the container:
 ```console
-apptainer exec --nv lisa_env.sif python3 -c
+# build .sif image
+apptainer build --fakeroot lisa_env.sif lisa_env.def
 
+# test if GPU is found correctly. 
+apptainer exec --nv lisa_env.sif python3 -c
 ```
