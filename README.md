@@ -13,6 +13,7 @@ apptainer registry login -u <username> docker://gitlab.esa.int:4567
 
 # Optional: reset env variable for apptainer build to large storage
 export APPTAINER_CACHEDIR=/scratch/project_2004833/depoorter/.apptainer_cache
+export APPTAINER_TMPDIR=/scratch/project_2004833/depoorter/apptainer_tmp
 
 # build .sif image
 apptainer build --fakeroot lisa_env.sif lisa_env.def
