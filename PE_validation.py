@@ -568,9 +568,9 @@ priors_in = {
     # Intrinsic parameters
     0: uniform_dist(params_mojito[0]*0.9, params_mojito[0]*1.1), # Primary Mass M
     1: uniform_dist(params_mojito[1]*0.9, params_mojito[1]*1.1), # Secondary Mass mu
-    2: uniform_dist(params_mojito[2]*0.9, params_mojito[2]*1.1), # Spin parameter a
+    2: uniform_dist(params_mojito[2]*0.9, min(params_mojito[2]*1.1, 0.999)), # Spin parameter a
     3: uniform_dist(params_mojito[3]*0.9, params_mojito[4]*1.1), # semi-latus rectum p0
-    4: uniform_dist(params_mojito[4]*0.9, params_mojito[5]*1.1), # eccentricity e0
+    4: uniform_dist(params_mojito[4]*0.9, min(params_mojito[5]*1.1, 0.8)), # eccentricity e0
     5: uniform_dist(params_mojito[6]*0.9, params_mojito[6]*1.1), # distance D
     # Extrinsic parameters -- Angular parameters
     6: uniform_dist(0, np.pi), # Polar angle (sky position)
@@ -646,9 +646,19 @@ del xyz_template_fft
 logger.info("Setting up backend  and sampler...")
 data_dir = f'{os.getcwd()}/output/source_{source_index}' 
 fp = f"{data_dir}/PE_run_source_{source_index}.h5"
-backend = HDFBackend(fp)
+
 logger.info(f"Backend set up at {fp}")
 
+if Reset_Backend:
+    os.remove(fp) # Manually get rid of backend
+    backend = HDFBackend(fp) # Set up new backend
+    
+else:
+    # if restarting run, fetch last samples as starting points
+    start = backend.get_last_sample() # Start from last sample
+    
+# set up sampler
+logger.info('Setting up sampler')
 ensemble = EnsembleSampler(
                             nwalkers,          
                             ndim,
@@ -660,21 +670,5 @@ ensemble = EnsembleSampler(
                             # vectorize=True
                             )
 
-
-if Reset_Backend:
-    os.remove(fp) # Manually get rid of backend
-    backend = HDFBackend(fp) # Set up new backend
-    ensemble = EnsembleSampler(
-                            nwalkers,          
-                            ndim,
-                            llike,
-                            priors,
-                            backend = backend,                 # Store samples to a .h5 file
-                            tempering_kwargs=tempering_kwargs,  # Allow tempering!
-                            moves = moves_stretch
-                            # vectorize=True
-                            )
-else:
-    start = backend.get_last_sample() # Start from last sample
 logger.info("Starting MCMC sampling...")
 out = ensemble.run_mcmc(start, iterations, progress=True)  # Run the sampler
