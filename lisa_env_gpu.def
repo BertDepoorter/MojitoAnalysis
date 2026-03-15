@@ -1,0 +1,160 @@
+Bootstrap: docker
+From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-emri-arm64
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+    export CUDA_HOME=/usr/local/cuda
+    export PATH=${CUDA_HOME}/bin:${PATH}
+    export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+    export CUDACXX=${CUDA_HOME}/bin/nvcc
+
+%post
+    # 1. Install System Compilers, LAPACKE, and pybind11 dev headers
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ gfortran \
+        liblapack-dev liblapacke-dev libblas-dev \
+        pkg-config cmake git wget \
+        pybind11-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+    # 2. SET CUDA ENVIRONMENT EARLY - before any pip install
+    #    This is critical: these must be set before scikit-build-core invokes CMake
+    export CUDA_HOME=/usr/local/cuda
+    export CUDACXX=${CUDA_HOME}/bin/nvcc
+    export PATH=${CUDA_HOME}/bin:${PATH}
+    export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+
+    # Verify nvcc is actually available
+    echo "=== Checking nvcc ==="
+    which nvcc
+    nvcc --version
+
+    # 3. Upgrade Python Tools
+    python3 -m pip install --no-cache-dir --upgrade \
+        pip setuptools wheel setuptools_scm scikit-build-core pybind11 cython
+
+    # 4. Install CuPy for CUDA 12.x BEFORE building GBT
+    #    GBT's check_cuda_backend() will call _check_cupy_works() at import time
+    python3 -m pip install --no-cache-dir \
+        cupy-cuda12x
+
+    # 5. Install core Python dependencies
+    python3 -m pip install --no-cache-dir \
+        numpy scipy pandas matplotlib \
+        eryn tqdm lisaconstants "lisaorbits>=3.0.0" \
+        corner arviz pesummary \
+        nvidia-ml-py
+
+    # bypass some security feature
+    git config --global --add safe.directory '*'
+
+    # 6. Source Builds (Order is critical)
+    mkdir -p /build
+    cd /build
+
+    # ============================================
+    # GPUBackendTools (spline branch)
+    # ============================================
+    git clone https://github.com/mikekatz04/GPUBackendTools.git
+    cd GPUBackendTools
+    git checkout spline
+
+    # CRITICAL: Force GPU ON and pass CUDA arch via cmake.define
+    # This ensures CMake does NOT silently fall back to AUTO->OFF
+    python3 -m pip install . --no-build-isolation \
+        --config-settings=cmake.define.GBT_WITH_GPU=ON \
+        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX}
+
+    # Verify the cuda12x backend was actually installed
+    echo "=== Verifying GBT CUDA 12x backend ==="
+    python3 -c "import gbt_backend_cuda12x; print('GBT cuda12x backend: OK')" || \
+    python3 -c "
+import importlib, sys
+# Check what gbt_backend modules exist
+for name in ['gbt_backend_cpu', 'gbt_backend_cuda12x',
+             'gpubackendtools_backend_cpu', 'gpubackendtools_backend_cuda12x']:
+    try:
+        importlib.import_module(name)
+        print(f'  {name}: FOUND')
+    except ModuleNotFoundError:
+        print(f'  {name}: MISSING')
+"
+
+    cd /build
+
+    # ============================================
+    # LISAanalysistools (lisa_on_fly branch)
+    # ============================================
+    git clone https://github.com/mikekatz04/LISAanalysistools.git
+    cd LISAanalysistools
+    git checkout lisa_on_fly
+
+    python3 -m pip install . --no-build-isolation \
+        --config-settings=cmake.define.LISATOOLS_WITH_GPU=ON \
+        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX}
+
+    # Verify the lisatools cuda12x backend was installed
+    echo "=== Verifying LISAtools CUDA 12x backend ==="
+    python3 -c "import lisatools_backend_cuda12x.pycppdetector; print('LISAtools cuda12x backend: OK')" || \
+        echo "WARNING: lisatools_backend_cuda12x not found!"
+
+    cd /build
+
+    # ============================================
+    # lisa-on-gpu / fastlisaresponse (tdi_on_fly branch)
+    # ============================================
+    git clone https://github.com/mikekatz04/lisa-on-gpu.git
+    cd lisa-on-gpu
+    git checkout tdi_on_fly
+
+    python3 -m pip install . --no-build-isolation \
+        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX}
+
+    cd /build
+
+    # 7. Full Backend Verification
+    echo "=== Full Backend Verification ==="
+    python3 -c "
+import sys
+print(f'Python: {sys.executable}')
+
+# 1. Check GBT backends
+print('--- GPUBackendTools ---')
+try:
+    import gpubackendtools_backend_cpu
+    print('  gpubackendtools_backend_cpu: OK')
+except ImportError as e:
+    print(f'  gpubackendtools_backend_cpu: FAIL ({e})')
+
+try:
+    import gpubackendtools_backend_cuda12x
+    print('  gpubackendtools_backend_cuda12x: OK')
+except ImportError as e:
+    print(f'  gpubackendtools_backend_cuda12x: FAIL ({e})')
+
+# 2. Check LISAtools backends
+print('--- LISAanalysistools ---')
+try:
+    import lisatools_backend_cpu.pycppdetector
+    print('  lisatools_backend_cpu: OK')
+except ImportError as e:
+    print(f'  lisatools_backend_cpu: FAIL ({e})')
+
+try:
+    import lisatools_backend_cuda12x.pycppdetector
+    print('  lisatools_backend_cuda12x: OK')
+except ImportError as e:
+    print(f'  lisatools_backend_cuda12x: FAIL ({e})')
+
+# 3. Check CuPy
+print('--- CuPy ---')
+try:
+    import cupy
+    print(f'  CuPy version: {cupy.__version__}')
+    print(f'  CUDA runtime: {cupy.cuda.runtime.runtimeGetVersion()}')
+except Exception as e:
+    print(f'  CuPy: FAIL ({e})')
+"
+
+%runscript
+    exec python3 "$@"

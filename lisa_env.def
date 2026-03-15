@@ -1,0 +1,95 @@
+Bootstrap: docker
+From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-emri-arm64
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+    export CUDA_HOME=/usr/local/cuda
+    export PATH=${CUDA_HOME}/bin:${PATH}
+    export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+    # Help CMake find the CUDA compiler
+    export CUDACXX=${CUDA_HOME}/bin/nvcc
+
+%post
+    # 1. Install System Compilers, LAPACKE, and pybind11 dev headers
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ gfortran \
+        liblapack-dev liblapacke-dev libblas-dev \
+        pkg-config cmake git wget \
+        pybind11-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+    # 2. Upgrade Python Tools
+    python3 -m pip install --no-cache-dir --upgrade \
+        pip setuptools wheel setuptools_scm scikit-build-core pybind11
+
+    # 3. Install core Python dependencies
+    python3 -m pip install --no-cache-dir \
+        numpy scipy pandas matplotlib \
+        eryn tqdm lisaconstants "lisaorbits>=3.0.0" \
+        corner arviz pesummary \
+        setuptools_scm
+    
+    # bypass some security feature
+    git config --global --add safe.directory '*'
+    
+    # 4. Source Builds (Order is critical)
+    mkdir -p /build
+    cd /build
+
+    # Define environment variables for the build process
+    export CUDA_HOME=/usr/local/cuda
+    export CUDACXX=/usr/local/cuda/bin/nvcc
+    export PATH=${CUDA_HOME}/bin:${PATH}
+
+    # Install packages from source
+    # GPUBackendTools (spline) ---
+    git clone https://github.com/mikekatz04/GPUBackendTools.git
+    cd GPUBackendTools
+    git checkout spline
+    # We use --no-build-isolation to ensure it uses the system numpy/etc.
+    python3 -m pip install . --no-build-isolation
+    cd /build
+
+    # LISAanalysistools (lisa_on_fly) ---
+    git clone https://github.com/mikekatz04/LISAanalysistools.git
+    cd LISAanalysistools
+    git checkout lisa_on_fly
+    python3 -m pip install . --no-build-isolation
+    cd /build
+
+     # lisa-on-gpu / fastlisaresponse (tdi_on_fly) ---
+    git clone https://github.com/mikekatz04/lisa-on-gpu.git
+    cd lisa-on-gpu
+    git checkout tdi_on_fly
+
+    # CRITICAL FIX: Set env vars so CMake sees CUDA and the GBT headers
+    export CUDA_HOME=/usr/local/cuda
+    export CUDACXX=/usr/local/cuda/bin/nvcc
+
+    # Use --no-build-isolation so it finds the GPUBackendTools we just installed
+    python3 -m pip install . --no-build-isolation
+    cd /build
+
+    # 6. Verify Backend Logic
+    echo "Verifying CUDA 12x Backend detection..."
+    python3 -c '
+import few
+import cupy
+try:
+    # Check if the backend is registered in FEW
+    cuda12_avail = few.has_backend("cuda12x")
+    print(f" - FEW cuda12x backend registered: {cuda12_avail}")
+    
+    # Check if CuPy can actually see the CUDA runtime
+    print(f" - CuPy runtime version: {cupy.cuda.runtime.runtimeGetVersion()}")
+except Exception as e:
+    print(f" - Backend check encountered an issue: {e}")
+'
+
+    # 7. Execute Unit Tests via Module
+    echo "Running FEW test suite..."
+    # Note: If the build node lacks a GPU, tests requiring hardware will be skipped.
+    python3 -m few.tests
+
+%runscript
+    exec python3 "$@"

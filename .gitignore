@@ -1,9 +1,0 @@
-*.h5
-*.npz
-*.npy
-*.pdf
-*.jpg
-*.jpeg
-.ipynb_checkpoints/
-data/
-.env
