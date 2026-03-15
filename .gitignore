@@ -1,0 +1,13 @@
+*.h5
+*.npz
+*.npy
+*.pdf
+*.jpg
+*.jpeg
+.ipynb_checkpoints/
+*.sif
+core.*
+.env
+data/
+lisa_emri_kernel/
+test_kernel.ipynb
