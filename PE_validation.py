@@ -510,7 +510,7 @@ def llike(params):
     EMRI_XYZ_fft_prop = cp.fft.rfft(waveform_prop * window, axis=1)[:, mask] 
     
     # Compute (d - h| d- h)
-    diff_f_XYZ = xyz_residual_windowed_fft - EMRI_XYZ_fft_prop
+    diff_f_XYZ = xyz_data_fft - EMRI_XYZ_fft_prop
     
     inn_prod = inner_prod_tdi(
         diff_f_XYZ,
@@ -569,8 +569,8 @@ priors_in = {
     0: uniform_dist(params_mojito[0]*0.9, params_mojito[0]*1.1), # Primary Mass M
     1: uniform_dist(params_mojito[1]*0.9, params_mojito[1]*1.1), # Secondary Mass mu
     2: uniform_dist(params_mojito[2]*0.9, min(params_mojito[2]*1.1, 0.999)), # Spin parameter a
-    3: uniform_dist(params_mojito[3]*0.9, params_mojito[4]*1.1), # semi-latus rectum p0
-    4: uniform_dist(params_mojito[4]*0.9, min(params_mojito[5]*1.1, 0.8)), # eccentricity e0
+    3: uniform_dist(params_mojito[3]*0.9, params_mojito[3]*1.1), # semi-latus rectum p0
+    4: uniform_dist(params_mojito[4]*0.9, min(params_mojito[4]*1.1, 0.8)), # eccentricity e0
     5: uniform_dist(params_mojito[6]*0.9, params_mojito[6]*1.1), # distance D
     # Extrinsic parameters -- Angular parameters
     6: uniform_dist(0, np.pi), # Polar angle (sky position)
