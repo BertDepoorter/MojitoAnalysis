@@ -11,3 +11,4 @@ core.*
 data/
 lisa_emri_kernel/
 test_kernel.ipynb
+scripts/

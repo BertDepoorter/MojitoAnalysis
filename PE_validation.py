@@ -61,6 +61,7 @@ from mojito.download import get_source_params
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", type=int, help = "WHich source to sample", default=0)
 parser.add_argument("--cluster", type=str, help = "Which cluster are you using", default='vsc')
+parser.add_argument("--sampling_cadence", type=float, help = "which sampling cadence to use for sampling", default=2.5)
 args = parser.parse_args()
 source_index = args.source
 
@@ -282,18 +283,27 @@ force_backend = "cuda12x" if use_gpu else None
 index_beta = 7
 index_lambda = 8
 
-tdi_kwargs = {
-    'tdi': '2nd generation',
-    'tdi_chan': 'XYZ',
-    'order': 39,
-}
-
 tdi_kwargs_esa = dict(
             orbits=esa,
             order=40,
             tdi=TDIConfig('2nd generation'),
             tdi_chan="XYZ",
         )
+
+check_memory()
+
+def check_memory():
+    free, total = cp.cuda.Device(0).mem_info
+    print(f'Free memory  : {free/1e9:.2f} Gb\nUsed memory  : {(total-free)/1e9:.2f} Gb\nTotal memory : {total/1e9:.2f} Gb\n')
+check_memory()
+
+logger.info("Create time arrays and spline the Mojito data to fastlisaresponse-compatible time array data")
+# Process Mojito data onto correct time array
+time_sim_L1 = cp.arange(t_init + 850.5, x2.shape[0]*delta_t + t_init + 850.5, dt)[:-1]  
+if args.sampling_cadence != dt:
+    dt = args.sampling_cadence
+    delta_t = dt
+    
 logger.info('Setting up response object')
 emri_TDI_list = ResponseWrapper(
     emri_waveform,
@@ -320,17 +330,11 @@ def emri_TDI(*params):
 # test
 chans = emri_TDI(*params_mojito)
 
-check_memory()
-
-def check_memory():
-    free, total = cp.cuda.Device(0).mem_info
-    print(f'Free memory  : {free/1e9:.2f} Gb\nUsed memory  : {(total-free)/1e9:.2f} Gb\nTotal memory : {total/1e9:.2f} Gb\n')
-check_memory()
-
-logger.info("Create time arrays and spline the Mojito data to fastlisaresponse-compatible time array data")
-# Process Mojito data onto correct time array
-time_sim_L1 = cp.arange(t_init + 850.5, x2.shape[0]*delta_t + t_init + 850.5, dt)[:-1]  
+    
+    
 time_flr_L1 = cp.arange(t_init, chans.shape[1]*delta_t + t_init, dt)[:-1] 
+
+
 
 check_memory()
 
@@ -547,9 +551,8 @@ logging.info(f"Mismatch between template and data: {mismatch:.2e}")
 logging.info("Starting PE run: setting up parameters")
 iterations = 20000  # The number of steps to run of each walker
 burnin = 0 # I always set burnin when I analyse my samples
-nwalkers = 50  #50 #members of the ensemble, like number of chains
 d = 0.1
-nwalkers = 128
+nwalkers = 40
 ntemps = 1        
 Reset_Backend = True
 tempering_kwargs=dict(ntemps=ntemps)  # Sampler requires the number of temperatures as a dictionary
@@ -564,11 +567,16 @@ logger.info(f"tempering_kwargs={tempering_kwargs}")
 logger.info(f"d = {d}")
 logger.info("Setting up priors and initial values...")
 # set priors
+logger.info('Determine prior for spin a based on sign')
+if params_mojito[2] >=0:
+    prior_a = uniform_dist(params_mojito[2]*0.9, min(params_mojito[2]*1.1, 0.999)), # Spin parameter a
+else:
+    prior_a = uniform_dist(max(params_mojito[2]*1.1, -0.999), params_mojito[2]*0.9), # Spin parameter a
 priors_in = {
     # Intrinsic parameters
     0: uniform_dist(params_mojito[0]*0.9, params_mojito[0]*1.1), # Primary Mass M
     1: uniform_dist(params_mojito[1]*0.9, params_mojito[1]*1.1), # Secondary Mass mu
-    2: uniform_dist(params_mojito[2]*0.9, min(params_mojito[2]*1.1, 0.999)), # Spin parameter a
+    2: prior_a, # Spin parameter a
     3: uniform_dist(params_mojito[3]*0.9, params_mojito[3]*1.1), # semi-latus rectum p0
     4: uniform_dist(params_mojito[4]*0.9, min(params_mojito[4]*1.1, 0.8)), # eccentricity e0
     5: uniform_dist(params_mojito[6]*0.9, params_mojito[6]*1.1), # distance D
@@ -624,7 +632,7 @@ if np.size(start.shape) == 1:
 else:
     ndim = start.shape[-1]
 
-priors = ProbDistContainer(priors_in, use_cupy = True)   # Set up priors so they can be used with the sampler.
+priors = ProbDistContainer(priors_in)   # Set up priors so they can be used with the sampler.
 
 # =================== SET UP PROPOSAL ==================
 moves_stretch = StretchMove(a=2.0, use_gpu=True)
