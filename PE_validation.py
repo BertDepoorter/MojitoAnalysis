@@ -569,9 +569,9 @@ logger.info("Setting up priors and initial values...")
 # set priors
 logger.info('Determine prior for spin a based on sign')
 if params_mojito[2] >=0:
-    prior_a = uniform_dist(params_mojito[2]*0.9, min(params_mojito[2]*1.1, 0.999)), # Spin parameter a
+    prior_a = uniform_dist(params_mojito[2]*0.9, min(params_mojito[2]*1.1, 0.999)) # Spin parameter a
 else:
-    prior_a = uniform_dist(max(params_mojito[2]*1.1, -0.999), params_mojito[2]*0.9), # Spin parameter a
+    prior_a = uniform_dist(max(params_mojito[2]*1.1, -0.999), params_mojito[2]*0.9) # Spin parameter a
 priors_in = {
     # Intrinsic parameters
     0: uniform_dist(params_mojito[0]*0.9, params_mojito[0]*1.1), # Primary Mass M
