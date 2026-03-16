@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH -t 8:00:00
+#SBATCH -t 20:00:00
 #SBATCH --cluster=wice
 #SBATCH --nodes=1
 #SBATCH --ntasks=18
@@ -16,4 +16,4 @@ conda activate lisatools_env
 cdw
 cd LISA/Mojito_analysis
 
-python PE_validation.py --source_index=0
+python PE_validation.py --source_index=0 --cluster=vsc

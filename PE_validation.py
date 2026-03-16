@@ -20,7 +20,7 @@ import cupy as cp
 import os
 import h5py
 from scipy.signal.windows import tukey
-from cupyx.scipy.interpolate import CubicSpline
+from scipy.interpolate import CubicSpline
 
 from h5py import File
 from lisaconstants import ASTRONOMICAL_YEAR
@@ -60,6 +60,8 @@ from mojito.download import get_source_params
 # read in source index from parser
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", type=int, help = "WHich source to sample", default=0)
+parser.add_argument("--cluster", type=str, help = "Which cluster are you using", default='vsc')
+parser.add_argument("--sampling_cadence", type=float, help = "which sampling cadence to use for sampling", default=2.5)
 args = parser.parse_args()
 source_index = args.source
 
@@ -79,8 +81,10 @@ import glob
 import os
 
 # change this to dataset location
-# scratch = '/scratch/leuven/367/vsc36785/MojitoLight/SIM_data/brickmarket/mojito_light_v1_0_0/data/EMRI/L1'
-scratch = '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_v1_0_0/data/EMRI/L1_0p4Hz'
+if args.cluster == 'vsc':
+    scratch = '/scratch/leuven/367/vsc36785/MojitoLight/SIM_data/brickmarket/mojito_light_v1_0_0/data/EMRI/L1'
+elif args.cluster == 'puhti':
+    scratch = '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_v1_0_0/data/EMRI/L1_0p4Hz'
 
 # Use * as a wildcard for the parts that change
 pattern = os.path.join(scratch, f'EMRI_731d_2.5s_L1_source{source_index}_*.h5')
@@ -203,6 +207,11 @@ mode_selection_threshold = 0.0
 f_s = 1/dt   
 home_folder = os.getcwd()
 
+def check_memory():
+    free, total = cp.cuda.Device(0).mem_info
+    print(f'Free memory  : {free/1e9:.2f} Gb\nUsed memory  : {(total-free)/1e9:.2f} Gb\nTotal memory : {total/1e9:.2f} Gb\n')
+check_memory()
+
 
 emri_waveform = EMRIWave_base(use_gpu=use_gpu, 
                          mode_selection_threshold=mode_selection_threshold,
@@ -212,6 +221,7 @@ emri_waveform = EMRIWave_base(use_gpu=use_gpu,
                          n_samples=n_samples,
                          offset=offset, # seconds
                         )
+check_memory()
 
 # Get source parameters for mbhb brick, source ID 12
 params = get_source_params("emri", source_id=source_index, username=my_password, token=my_username)
@@ -238,6 +248,7 @@ lam_ecl, beta_ecl = icrs_to_ecliptic(ra, dec)
 qS_ecl = np.pi / 2 - beta_ecl
 phiS_ecl = lam_ecl
 
+logger.info('Creating FEW-compatible parameter array')
 # create array with True parameters
 params_mojito = [
     params['PrimaryMassSSBFrame'],
@@ -257,6 +268,7 @@ params_mojito = [
 ]
 
 # response
+logger.info('Setting up orbits object')
 home_folder = os.getcwd()
 orbit_file= f'{home_folder}/esa-trailing-orbits-mojito_validation_test_2.h5'
 force_backend = 'cuda12x'
@@ -271,12 +283,6 @@ force_backend = "cuda12x" if use_gpu else None
 index_beta = 7
 index_lambda = 8
 
-tdi_kwargs = {
-    'tdi': '2nd generation',
-    'tdi_chan': 'XYZ',
-    'order': 39,
-}
-
 tdi_kwargs_esa = dict(
             orbits=esa,
             order=40,
@@ -284,6 +290,21 @@ tdi_kwargs_esa = dict(
             tdi_chan="XYZ",
         )
 
+check_memory()
+
+def check_memory():
+    free, total = cp.cuda.Device(0).mem_info
+    print(f'Free memory  : {free/1e9:.2f} Gb\nUsed memory  : {(total-free)/1e9:.2f} Gb\nTotal memory : {total/1e9:.2f} Gb\n')
+check_memory()
+
+logger.info("Create time arrays and spline the Mojito data to fastlisaresponse-compatible time array data")
+# Process Mojito data onto correct time array
+time_sim_L1 = cp.arange(t_init + 850.5, x2.shape[0]*delta_t + t_init + 850.5, dt)[:-1]  
+if args.sampling_cadence != dt:
+    dt = args.sampling_cadence
+    delta_t = dt
+    
+logger.info('Setting up response object')
 emri_TDI_list = ResponseWrapper(
     emri_waveform,
     T,
@@ -301,43 +322,57 @@ emri_TDI_list = ResponseWrapper(
     **tdi_kwargs_esa,
 )
 
+check_memory()
+
 def emri_TDI(*params):
     return cp.asarray(emri_TDI_list(*params))
 
 # test
 chans = emri_TDI(*params_mojito)
 
-# Process Mojito data onto correct time array
-time_sim_L1 = np.arange(t_init + 850.5, x2.shape[0]*delta_t + t_init + 850.5, dt)[:-1]  
-time_flr_L1 = np.arange(t_init, chans.shape[1]*delta_t + t_init, dt)[:-1] 
+    
+    
+time_flr_L1 = cp.arange(t_init, chans.shape[1]*delta_t + t_init, dt)[:-1] 
 
-data = cp.asarray([x2, y2, z2])
+
+
+check_memory()
+
+data = np.asarray([x2, y2, z2])
 
 # from scipy.interpolate import CubicSpline
-window = cp.asarray(tukey(len(time_sim_L1), alpha=0.01))
-
+window = cp.asarray(tukey(len(time_flr_L1), alpha=0.01))
+check_memory()
 # This data array is splined onto the same time array that is returned by fastlisaresponse. 
 # Otherwise no perfect subtraction possible
-data_splined = CubicSpline(time_sim_L1, data, axis=1)(time_flr_L1) 
 
+data_splined = cp.asarray(CubicSpline(time_sim_L1.get(), data, axis=1)(time_flr_L1.get()) )
+
+logger.info('Create residuals')
 # Compute residual
 xyz_residual = data_splined - chans
 xyz_residual_windowed = xyz_residual * window
 
-N_t = len(data[0])
+
+logger.info('Creating frequency array and mask')
+N_t = len(data_splined[0])
 freqs = cp.fft.rfftfreq(N_t, d=dt)
 
 f_max = 1/(2*dt) # Nyquist frequency
 f_min = 1e-5 # minimum frequency to consider
 mask = (freqs >= f_min) & (freqs <= f_max)
 freqs_inband = freqs[mask]
-
+logger.info("Transforming data into frequency domain")
 xyz_residual_windowed_fft = cp.fft.rfft(xyz_residual_windowed, axis=1)[:, mask]
 xyz_data_fft = cp.fft.rfft(data_splined * window, axis=1)[:, mask]
 xyz_template_fft = cp.fft.rfft(chans * window, axis=1)[:, mask]
 
 # Load and process noise model
-noise_file = f"/scratch/project_2004833/common_data/mojito/brickmarket/mojito_v1_0_0/data/INSTRUMENT/L1_0p4Hz/NOISE_731d_2.5s_L1_source0_0_20251206T220508924302Z.h5"
+logger.info('Loading and initializing covariance matrices')
+if args.cluster == 'vsc':
+    noise_file = '/scratch/leuven/367/vsc36785/MojitoLight/SIM_data/brickmarket/mojito_light_v1_0_0/data/NOISE/L1/NOISE_731d_2.5s_L1_source0_0_20251206T220508924302Z.h5'
+elif args.cluster == 'puhti': 
+    noise_file = f"/scratch/project_2004833/common_data/mojito/brickmarket/mojito_v1_0_0/data/INSTRUMENT/L1_0p4Hz/NOISE_731d_2.5s_L1_source0_0_20251206T220508924302Z.h5"
 
 with h5py.File(noise_file, "r") as f:
     xyz_noise_estimate = np.mean(f['noise_estimates/XYZ'][:], axis=0) / CENTRAL_FREQ**2
@@ -350,15 +385,15 @@ with h5py.File(noise_file, "r") as f:
 # Interpolate noise curves
 freqs_inband_np = np.asarray(freqs_inband.get())
 
-splined_noise_psd = cp.array([
+splined_noise_psd = np.array([
     CubicSpline(noise_freqs, xyz_noise_estimate[:, i, i])(freqs_inband_np) for i in range(3)
 ])
 
-splined_noise_csd_real = cp.array([
+splined_noise_csd_real = np.array([
     CubicSpline(noise_freqs, xyz_noise_estimate[:, i, j].real)(freqs_inband_np) for i in range(3) for j in range(i, 3)
 ])
 
-splined_noise_psd_imag = cp.array([
+splined_noise_psd_imag = np.array([
     CubicSpline(noise_freqs, xyz_noise_estimate[:, i, j].imag)(freqs_inband_np) for i in range(3) for j in range(i, 3)   
 ])
 
@@ -371,15 +406,13 @@ for i in range(3):
         covariance_matrices[i, j, :] = splined_noise_csd_real[i*3 + j - (i+1)*i//2] + 1j * splined_noise_psd_imag[i*3 + j - (i+1)*i//2]
         covariance_matrices[j, i, :] = np.conj(covariance_matrices[i, j, :])
 
-invC = np.linalg.inv(covariance_matrices.transpose(2, 0, 1))
+invC = cp.asarray(np.linalg.inv(covariance_matrices.transpose(2, 0, 1)))
+del covariance_matrices
+del x2, y2, z2
 pre_fact = 2 * dt / N_t
 invC *= pre_fact
 
-
-def check_memory():
-    free, total = cp.cuda.Device(0).mem_info
-    print(f'Free memory  : {free/1e9:.2f} Gb\nUsed memory  : {(total-free)/1e9:.2f} Gb\nTotal memory : {total/1e9:.2f} Gb\n')
-check_memory()
+logger.info('Create inner product, loglikelihood and SNR functions')
 
 def inner_prod_tdi(a_fft, b_fft, cov_inv_matrices):
     """
@@ -457,7 +490,7 @@ def llike(params):
     a_val =  float(params[2])            
     p0_val = float(params[3])
     e0_val = float(params[4])
-    x_I0_val = params_mojito[6]
+    x_I0_val = params_mojito[5]
     
     # Luminosity distance 
     D_val = float(params[5])
@@ -481,7 +514,7 @@ def llike(params):
     EMRI_XYZ_fft_prop = cp.fft.rfft(waveform_prop * window, axis=1)[:, mask] 
     
     # Compute (d - h| d- h)
-    diff_f_XYZ = xyz_residual_windowed_fft - EMRI_XYZ_fft_prop
+    diff_f_XYZ = xyz_data_fft - EMRI_XYZ_fft_prop
     
     inn_prod = inner_prod_tdi(
         diff_f_XYZ,
@@ -518,9 +551,8 @@ logging.info(f"Mismatch between template and data: {mismatch:.2e}")
 logging.info("Starting PE run: setting up parameters")
 iterations = 20000  # The number of steps to run of each walker
 burnin = 0 # I always set burnin when I analyse my samples
-nwalkers = 50  #50 #members of the ensemble, like number of chains
 d = 0.1
-nwalkers = 128
+nwalkers = 40
 ntemps = 1        
 Reset_Backend = True
 tempering_kwargs=dict(ntemps=ntemps)  # Sampler requires the number of temperatures as a dictionary
@@ -533,15 +565,20 @@ logger.info(f"ntemps={ntemps}")
 logger.info(f"Reset_backend={Reset_Backend}")
 logger.info(f"tempering_kwargs={tempering_kwargs}")
 logger.info(f"d = {d}")
-logger.infor("Setting up priors and initial values...")
+logger.info("Setting up priors and initial values...")
 # set priors
+logger.info('Determine prior for spin a based on sign')
+if params_mojito[2] >=0:
+    prior_a = uniform_dist(params_mojito[2]*0.9, min(params_mojito[2]*1.1, 0.999)) # Spin parameter a
+else:
+    prior_a = uniform_dist(max(params_mojito[2]*1.1, -0.999), params_mojito[2]*0.9) # Spin parameter a
 priors_in = {
     # Intrinsic parameters
-    0: uniform_dist(params_mojito[0]*0.9999, params_mojito[0]*1.0001), # Primary Mass M
-    1: uniform_dist(params_mojito[1]*0.9999, params_mojito[1]*1.0001), # Secondary Mass mu
-    2: uniform_dist(params_mojito[2]*0.9999, params_mojito[2]*1.0001), # Spin parameter a
-    3: uniform_dist(params_mojito[3]*0.9999, params_mojito[4]*1.0001), # semi-latus rectum p0
-    4: uniform_dist(params_mojito[4]*0.9999, params_mojito[5]*1.0001), # eccentricity e0
+    0: uniform_dist(params_mojito[0]*0.9, params_mojito[0]*1.1), # Primary Mass M
+    1: uniform_dist(params_mojito[1]*0.9, params_mojito[1]*1.1), # Secondary Mass mu
+    2: prior_a, # Spin parameter a
+    3: uniform_dist(params_mojito[3]*0.9, params_mojito[3]*1.1), # semi-latus rectum p0
+    4: uniform_dist(params_mojito[4]*0.9, min(params_mojito[4]*1.1, 0.8)), # eccentricity e0
     5: uniform_dist(params_mojito[6]*0.9, params_mojito[6]*1.1), # distance D
     # Extrinsic parameters -- Angular parameters
     6: uniform_dist(0, np.pi), # Polar angle (sky position)
@@ -595,7 +632,7 @@ if np.size(start.shape) == 1:
 else:
     ndim = start.shape[-1]
 
-priors = ProbDistContainer(priors_in, use_cupy = True)   # Set up priors so they can be used with the sampler.
+priors = ProbDistContainer(priors_in)   # Set up priors so they can be used with the sampler.
 
 # =================== SET UP PROPOSAL ==================
 moves_stretch = StretchMove(a=2.0, use_gpu=True)
@@ -609,12 +646,28 @@ if ntemps > 1:
 else:
     print("Value of starting log-likelihood points", llike(start[0])) 
 
+# clear out memory
+del chans
+del xyz_residual_windowed_fft
+del xyz_template_fft
+    
 logger.info("Setting up backend  and sampler...")
-data_dir = f'{os.getcwd()}/data' 
+data_dir = f'{os.getcwd()}/output/source_{source_index}' 
 fp = f"{data_dir}/PE_run_source_{source_index}.h5"
-backend = HDFBackend(fp)
+
 logger.info(f"Backend set up at {fp}")
 
+if Reset_Backend:
+    if os.path.exists(fp):
+        os.remove(fp) # Manually get rid of backend
+    backend = HDFBackend(fp) # Set up new backend
+    
+else:
+    # if restarting run, fetch last samples as starting points
+    start = backend.get_last_sample() # Start from last sample
+    
+# set up sampler
+logger.info('Setting up sampler')
 ensemble = EnsembleSampler(
                             nwalkers,          
                             ndim,
@@ -622,25 +675,9 @@ ensemble = EnsembleSampler(
                             priors,
                             backend = backend,                 # Store samples to a .h5 file
                             tempering_kwargs=tempering_kwargs,  # Allow tempering!
-                            moves = moves_stretch,
-                            vectorize=True
+                            moves = moves_stretch
+                            # vectorize=True
                             )
 
-
-if Reset_Backend:
-    os.remove(fp) # Manually get rid of backend
-    backend = HDFBackend(fp) # Set up new backend
-    ensemble = EnsembleSampler(
-                            nwalkers,          
-                            ndim,
-                            llike,
-                            priors,
-                            backend = backend,                 # Store samples to a .h5 file
-                            tempering_kwargs=tempering_kwargs,  # Allow tempering!
-                            moves = moves_stretch,
-                            vectorize=True
-                            )
-else:
-    start = backend.get_last_sample() # Start from last sample
 logger.info("Starting MCMC sampling...")
 out = ensemble.run_mcmc(start, iterations, progress=True)  # Run the sampler

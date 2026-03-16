@@ -1,0 +1,32 @@
+name: few_light
+channels:
+  - nvidia/label/cuda-12.2.0
+  - conda-forge
+dependencies:
+  - scipy==1.16.1
+  - matplotlib==3.10.6
+  - astropy==7.2
+  - cuda-toolkit
+  - cuda-nvcc
+  - cuda-runtime
+  - gcc_linux-64
+  - libgfortran5
+  - gsl
+  - Cython
+  - tqdm
+  - requests
+  - schwimmbad=0.4.2
+  - pip:
+      - gdown==5.2.0
+      - healpy==1.19.0
+      - typing-extensions==4.15.0
+      - cupy-cuda12x==13.6.0
+      - fastemriwaveforms-cuda12x==2.0.0
+      - eryn
+      - numpy<=1.29.0
+      - cupy-cuda12x==13.6.0
+      - arviz
+      - corner
+      - pesummary
+      - segwo 
+      - pywavelet
