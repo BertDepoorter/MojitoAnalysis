@@ -658,7 +658,8 @@ fp = f"{data_dir}/PE_run_source_{source_index}.h5"
 logger.info(f"Backend set up at {fp}")
 
 if Reset_Backend:
-    os.remove(fp) # Manually get rid of backend
+    if os.path.exists(fp):
+        os.remove(fp) # Manually get rid of backend
     backend = HDFBackend(fp) # Set up new backend
     
 else:
