@@ -1,0 +1,76 @@
+Bootstrap: docker
+From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-emri-arm64
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+    export CONDA_PREFIX=/home/lisauser/miniforge3
+    export CUDA_HOME=${CONDA_PREFIX}
+    export PATH=${CONDA_PREFIX}/bin:${PATH}
+    export LD_LIBRARY_PATH=${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH}
+    export CUDACXX=${CONDA_PREFIX}/bin/nvcc
+    # This helps modern CMake find the Conda-specific libraries
+    export CUDAToolkit_ROOT=${CONDA_PREFIX}
+
+%post
+    # 1. Install System Compilers
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ gfortran \
+        liblapack-dev liblapacke-dev libblas-dev \
+        pkg-config cmake git wget \
+        pybind11-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+    export CONDA_PREFIX=/home/lisauser/miniforge3
+    export CUDA_HOME=${CONDA_PREFIX}
+    export PATH=${CONDA_PREFIX}/bin:${PATH}
+    export LD_LIBRARY_PATH=${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH}
+    export CUDACXX=${CONDA_PREFIX}/bin/nvcc
+    export CUDAToolkit_ROOT=${CONDA_PREFIX}
+
+    # CRITICAL: Force CMake to build GPU kernels without needing a GPU present
+    # Replace '90' with the architecture of the NEW cluster GPUs (e.g., 80 for A100, 90 for H100)
+    export CMAKE_ARGS="-DCMAKE_CUDA_ARCHITECTURES=70 -DCUDAToolkit_ROOT=${CONDA_PREFIX}"
+    
+    # 3. Upgrade Python Tools using the Conda pip
+    python3 -m pip install --no-cache-dir --upgrade \
+        pip setuptools wheel setuptools_scm scikit-build-core pybind11
+        
+    python3 -m pip install eryn lisaconstants==1.3.6 pesummary corner arviz ipykernel
+    
+    # 1. Build Tools (Same as before, but now CMAKE_ARGS is active)
+    mkdir -p /build && cd /build
+    
+    python3 -m pip install --no-cache-dir \
+        numpy scipy pandas matplotlib \
+        eryn tqdm lisaconstants==2.0.1 "lisaorbits>=3.0.0" \
+        corner arviz pesummary eryn\
+        setuptools_scm
+    
+    # Bypass security for git clones
+    git config --global --add safe.directory '*'
+    
+    # GPUBackendTools
+    git clone https://github.com/mikekatz04/GPUBackendTools.git
+    cd GPUBackendTools && git checkout spline
+    python3 -m pip install . --no-build-isolation
+    cd ..
+
+    # LISAanalysistools
+    git clone https://github.com/mikekatz04/LISAanalysistools.git
+    cd LISAanalysistools && git checkout lisa_on_fly
+    # Some versions of this package need this script to bridge to GPUBackendTools
+
+    python3 -m pip install . --no-build-isolation
+    cd ..
+
+    # fastlisaresponse (lisa-on-gpu)
+    git clone https://github.com/mikekatz04/lisa-on-gpu.git
+    cd lisa-on-gpu && git checkout tdi_on_fly
+    # Force the cuda12x backend build
+    python3 -m pip install .[cuda12x] --no-build-isolation
+    cd /build
+
+    rm -rf /build
+
+%runscript
+    exec python3 "$@"
