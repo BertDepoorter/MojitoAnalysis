@@ -15,5 +15,7 @@ conda activate lisatools_env
 
 cdw
 cd LISA/Mojito_analysis
-
-python PE_validation.py --source_index=0 --cluster=vsc
+pwd
+HOME_FOLDER=/data/leuven/367/vsc36785/LISA/Mojito_analysis
+SCRIPT=$HOME_FOLDER/PE_validation.py
+python $SCRIPT --source=0 --cluster=vsc
