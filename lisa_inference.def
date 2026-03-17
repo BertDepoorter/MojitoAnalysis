@@ -44,16 +44,18 @@ From: nvidia/cuda:12.2.0-devel-ubuntu22.04
     export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 
     # ── 1. System packages ───────────────────────────────────────────────────
-    apt-get update && apt-get install -y --no-install-recommends \
+    # Hold systemd BEFORE any apt-get install, because dependencies like
+    # software-properties-common pull it in, and its post-install script
+    # fails in Apptainer (can't write /etc/group, /etc/resolv.conf is
+    # read-only, no usable /proc for systemd-tmpfiles, etc.).
+    apt-get update
+    apt-mark hold systemd libsystemd0 udev 2>/dev/null || true
+
+    apt-get install -y --no-install-recommends \
         software-properties-common ca-certificates
     add-apt-repository ppa:deadsnakes/ppa -y
 
     apt-get update
-    # Prevent apt from upgrading/reconfiguring systemd — its post-install
-    # scripts fail in Apptainer (can't write /etc/group, /etc/resolv.conf
-    # is read-only, no usable /proc for systemd-tmpfiles, etc.).
-    apt-mark hold systemd libsystemd0 udev 2>/dev/null || true
-
     apt-get install -y --no-install-recommends \
         build-essential gcc g++ gfortran \
         python3.14 python3.14-dev python3.14-venv \
