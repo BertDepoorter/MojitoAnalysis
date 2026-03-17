@@ -45,12 +45,24 @@ From: nvidia/cuda:12.2.0-devel-ubuntu22.04
 
     # ── 1. System packages ───────────────────────────────────────────────────
     apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common ca-certificates
+    add-apt-repository ppa:deadsnakes/ppa -y
+
+    apt-get update
+    # Prevent apt from upgrading/reconfiguring systemd — its post-install
+    # scripts fail in Apptainer (can't write /etc/group, /etc/resolv.conf
+    # is read-only, no usable /proc for systemd-tmpfiles, etc.).
+    apt-mark hold systemd libsystemd0 udev 2>/dev/null || true
+
+    apt-get install -y --no-install-recommends \
         build-essential gcc g++ gfortran \
-        python3 python3-dev python3-pip \
+        python3.14 python3.14-dev python3.14-venv \
         liblapack-dev liblapacke-dev libblas-dev \
         pkg-config cmake git wget \
-        pybind11-dev \
         && rm -rf /var/lib/apt/lists/*
+
+    python3.14 -m ensurepip --upgrade
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.14 1
 
     # Verify the CUDA compiler is present before any GPU build
     echo "=== CUDA toolchain ==="
@@ -73,7 +85,8 @@ From: nvidia/cuda:12.2.0-devel-ubuntu22.04
         corner arviz pesummary \
         nvidia-ml-py pydantic pyyaml requests rich wrapt \
         numba multispline jsonschema platformdirs \
-        python-dotenv
+        python-dotenv \ 
+        fastemriwaveforms==2.0.0
 
     # ── 5. Fast EMRI Waveforms (FEW) ─────────────────────────────────────────
     python3 -m pip install --no-cache-dir fastemriwaveforms-cuda12x
@@ -205,4 +218,4 @@ for label, ok, info in results:
 PYEOF
 
 %runscript
-    exec python3 "$@"
+    exec python3.14 "$@"
