@@ -27,11 +27,6 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     LISAtools_commit 6a8ec5c6923aeb6ba32af6694137e94d59c774f0
     FLR_commit       66fa859dbcb17394b67fc563f47c00466bd14468
 
-%files
-    git_repos/GPUBackendTools    /opt/src/GPUBackendTools
-    git_repos/LISAanalysistools  /opt/src/LISAanalysistools
-    git_repos/lisa-on-gpu        /opt/src/lisa-on-gpu
-
 %environment
     export CUDA_HOME=/usr/local/cuda-12.2
     export CUDACXX=${CUDA_HOME}/bin/nvcc
@@ -49,6 +44,24 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     pip install --no-cache-dir \
         eryn corner arviz pesummary \
         fastemriwaveforms==2.0.0 fastemriwaveforms-cuda12x
+
+    # ── Clone source repositories at pinned commits ───────────────────────────
+    mkdir -p /opt/src
+
+    git clone --branch spline \
+        https://github.com/mikekatz04/GPUBackendTools.git \
+        /opt/src/GPUBackendTools
+    git -C /opt/src/GPUBackendTools checkout 0491451a1ae5048c7976c5c4b73cd91401b24de2
+
+    git clone --branch lisa_on_fly \
+        https://github.com/mikekatz04/LISAanalysistools.git \
+        /opt/src/LISAanalysistools
+    git -C /opt/src/LISAanalysistools checkout 6a8ec5c6923aeb6ba32af6694137e94d59c774f0
+
+    git clone --branch tdi_on_fly \
+        https://github.com/mikekatz04/lisa-on-gpu.git \
+        /opt/src/lisa-on-gpu
+    git -C /opt/src/lisa-on-gpu checkout 66fa859dbcb17394b67fc563f47c00466bd14468
 
     # ── Shared cmake config flags ─────────────────────────────────────────────
     CMAKE_FLAGS="--no-build-isolation \
