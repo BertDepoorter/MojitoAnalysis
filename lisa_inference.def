@@ -45,6 +45,9 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
         eryn corner arviz pesummary \
         fastemriwaveforms==2.0.0 fastemriwaveforms-cuda12x
 
+    # ── Build-time dependencies for --no-build-isolation builds ──────────────
+    pip install --no-cache-dir scikit-build-core cmake ninja
+
     # ── Clone source repositories at pinned commits ───────────────────────────
     git config --global --add safe.directory '*'
     mkdir -p /opt/src
