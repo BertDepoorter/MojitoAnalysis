@@ -46,6 +46,7 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
         fastemriwaveforms==2.0.0 fastemriwaveforms-cuda12x
 
     # ── Clone source repositories at pinned commits ───────────────────────────
+    git config --global --add safe.directory '*'
     mkdir -p /opt/src
 
     git clone --branch spline \
