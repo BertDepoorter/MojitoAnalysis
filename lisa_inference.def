@@ -40,6 +40,10 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     export PATH=${CUDA_HOME}/bin:/home/lisauser/miniforge3/bin:${PATH}
     export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 
+    # ── Fortran compiler required by GPUBackendTools CMake build ─────────────
+    apt-get update && apt-get install -y --no-install-recommends gfortran \
+        && rm -rf /var/lib/apt/lists/*
+
     # ── PE / inference packages not in the base image ────────────────────────
     pip install --no-cache-dir \
         eryn corner arviz pesummary \
