@@ -43,7 +43,9 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     # ── PE / inference packages not in the base image ────────────────────────
     pip install --no-cache-dir \
         eryn corner arviz pesummary \
-        fastemriwaveforms==2.0.0 fastemriwaveforms-cuda12x
+        fastemriwaveforms==2.0.0 fastemriwaveforms-cuda12x \
+        setuptools_scm \ 
+        tqdm lisaconstants "lisaorbits>=3.0.0" \
 
     # ── Build-time dependencies for --no-build-isolation builds ──────────────
     pip install --no-cache-dir scikit-build-core cmake ninja
