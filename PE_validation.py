@@ -269,7 +269,8 @@ params_mojito = [
 
 # response
 logger.info('Setting up orbits object')
-home_folder = os.getcwd()
+home_folder = '/data/leuven/367/vsc36785/LISA/Mojito_analysis'
+# LISA/Mojito_analysis/esa-trailing-orbits-mojito_validation_test_2.h5
 orbit_file= f'{home_folder}/esa-trailing-orbits-mojito_validation_test_2.h5'
 force_backend = 'cuda12x'
 esa = Orbits(filename=orbit_file, 
@@ -652,7 +653,7 @@ del xyz_residual_windowed_fft
 del xyz_template_fft
     
 logger.info("Setting up backend  and sampler...")
-data_dir = f'{os.getcwd()}/output/source_{source_index}' 
+data_dir = f'{home_folder}/output/source_{source_index}' 
 fp = f"{data_dir}/PE_run_source_{source_index}.h5"
 
 logger.info(f"Backend set up at {fp}")
