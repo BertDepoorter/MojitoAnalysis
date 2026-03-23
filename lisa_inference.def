@@ -1,21 +1,23 @@
 Bootstrap: docker
-From: nvidia/cuda:12.2.0-devel-ubuntu22.04
+From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu-arm64
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LISA Inference Container
 #
-# Packages cloned from GitHub and pinned to exact commits:
-#   - gpubackendtools    : spline branch,   commit 0491451
-#   - lisaanalysistools  : lisa_on_fly branch, commit 6a8ec5c
-#   - fastlisaresponse   : tdi_on_fly branch,  commit 66fa859
+# Base image provides: CUDA 12.2, nvcc, conda (miniforge3), core LISA stack
+# (lisaconstants, lisaorbits, lisainstrument, lisagwresponse, mojito, cupy)
 #
-# Target: NVIDIA V100 (sm_70), CUDA 12.2
+# This layer adds: PE packages + GPU source builds of
+#   GPUBackendTools   commit 0491451  (spline branch)
+#   LISAanalysistools commit 6a8ec5c  (lisa_on_fly branch)
+#   fastlisaresponse  commit 66fa859  (tdi_on_fly branch)
 #
-# Build command:
+# GPU target: NVIDIA V100 (sm_70) / CUDA 12.2
+#
+# Build:
 #   apptainer build lisa_inference.sif lisa_inference.def
-#
-# Runtime (on cluster node with V100):
-#   apptainer exec --nv lisa_inference.sif python3 PE_validation.py
+# Run:
+#   apptainer exec --nv lisa_inference.sif python PE_validation.py
 # ─────────────────────────────────────────────────────────────────────────────
 
 %labels
@@ -26,196 +28,72 @@ From: nvidia/cuda:12.2.0-devel-ubuntu22.04
     FLR_commit       66fa859dbcb17394b67fc563f47c00466bd14468
 
 %environment
-    export DEBIAN_FRONTEND=noninteractive
-    # CUDA paths -- used by both Python packages and the NVIDIA runtime
-    export CUDA_HOME=/usr/local/cuda
-    export PATH=${CUDA_HOME}/bin:${PATH}
-    export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+    export CUDA_HOME=/usr/local/cuda-12.2
     export CUDACXX=${CUDA_HOME}/bin/nvcc
-    # Force the cuda12x backend at runtime (matches compiled backend)
+    export PATH=${CUDA_HOME}/bin:/home/lisauser/miniforge3/bin:${PATH}
+    export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
     export GPUBACKENDTOOLS_FORCE_BACKEND=cuda12x
 
 %post
-    # ── Replicate environment variables for the build phase ──────────────────
-    export DEBIAN_FRONTEND=noninteractive
-    export CUDA_HOME=/usr/local/cuda
+    export CUDA_HOME=/usr/local/cuda-12.2
     export CUDACXX=${CUDA_HOME}/bin/nvcc
-    export PATH=${CUDA_HOME}/bin:${PATH}
+    export PATH=${CUDA_HOME}/bin:/home/lisauser/miniforge3/bin:${PATH}
     export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 
-    # ── 1. System packages ───────────────────────────────────────────────────
-    apt-get update && apt-get install -y --no-install-recommends \
-        software-properties-common ca-certificates
-    add-apt-repository ppa:deadsnakes/ppa -y
-
-    apt-get update
-    # Prevent apt from upgrading/reconfiguring systemd — its post-install
-    # scripts fail in Apptainer (can't write /etc/group, /etc/resolv.conf
-    # is read-only, no usable /proc for systemd-tmpfiles, etc.).
-    apt-mark hold systemd libsystemd0 udev 2>/dev/null || true
-
-    apt-get install -y --no-install-recommends \
-        build-essential gcc g++ gfortran \
-        python3.14 python3.14-dev python3.14-venv \
-        liblapack-dev liblapacke-dev libblas-dev \
-        pkg-config cmake git wget \
+    # ── Fortran compiler required by GPUBackendTools CMake build ─────────────
+    apt-get update && apt-get install -y --no-install-recommends gfortran \
         && rm -rf /var/lib/apt/lists/*
 
-    python3.14 -m ensurepip --upgrade
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.14 1
+    # ── PE / inference packages not in the base image ────────────────────────
+    pip install --no-cache-dir \
+        eryn corner arviz pesummary \
+        fastemriwaveforms==2.0.0 fastemriwaveforms-cuda12x \
+        setuptools_scm \ 
+        tqdm lisaconstants "lisaorbits>=3.0.0" \
 
-    # Verify the CUDA compiler is present before any GPU build
-    echo "=== CUDA toolchain ==="
-    which nvcc
-    nvcc --version
+    # ── Build-time dependencies for --no-build-isolation builds ──────────────
+    pip install --no-cache-dir scikit-build-core cmake ninja
 
-    # ── 2. Python build tools ────────────────────────────────────────────────
-    python3 -m pip install --no-cache-dir --upgrade \
-        pip setuptools wheel setuptools_scm scikit-build-core pybind11 cython
-
-    # ── 3. CuPy (CUDA 12.x) ──────────────────────────────────────────────────
-    # Must be installed BEFORE GPUBackendTools so that GBT's backend-detection
-    # logic (_check_cupy_works) succeeds when the module is first imported.
-    python3 -m pip install --no-cache-dir cupy-cuda12x
-
-    # ── 4. Runtime Python dependencies ───────────────────────────────────────
-    python3 -m pip install --no-cache-dir \
-        numpy scipy pandas matplotlib h5py \
-        eryn tqdm lisaconstants "lisaorbits>=3.0.0" \
-        corner arviz pesummary \
-        nvidia-ml-py pydantic pyyaml requests rich wrapt \
-        numba multispline jsonschema platformdirs \
-        python-dotenv \ 
-        fastemriwaveforms==2.0.0
-
-    # ── 5. Fast EMRI Waveforms (FEW) ─────────────────────────────────────────
-    python3 -m pip install --no-cache-dir fastemriwaveforms-cuda12x
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Source builds -- order is CRITICAL:
-    #   GPUBackendTools  →  LISAanalysistools  →  fastlisaresponse
-    #
-    # --no-build-isolation: use the already-installed packages from the steps
-    #   above (numpy, pybind11, scikit-build-core, gpubackendtools, ...).
-    #
-    # cmake.define.X=Y: forwarded to CMake as -DX=Y.
-    #
-    # SETUPTOOLS_SCM_PRETEND_VERSION: overrides version detection so that
-    #   setuptools-scm does not fail on detached-HEAD or untagged commits.
-    #   The chosen versions satisfy the version constraints in pyproject.toml
-    #   of dependent packages.
-    #
-    # CUDA arch 70 = NVIDIA V100 (compute capability 7.0).
-    # Build-time GPU is not required; only nvcc + headers are needed.
-    # ─────────────────────────────────────────────────────────────────────────
-
+    # ── Clone source repositories at pinned commits ───────────────────────────
+    git config --global --add safe.directory '*'
     mkdir -p /opt/src
-    cd /opt/src
 
-    # ── 6. GPUBackendTools (spline branch, pinned to commit 0491451) ─────────
-    echo ""
-    echo "=== Cloning GPUBackendTools ==="
-    git clone https://github.com/mikekatz04/GPUBackendTools.git
-    cd GPUBackendTools
-    git checkout 0491451a1ae5048c7976c5c4b73cd91401b24de2
+    git clone --branch spline \
+        https://github.com/mikekatz04/GPUBackendTools.git \
+        /opt/src/GPUBackendTools
+    git -C /opt/src/GPUBackendTools checkout 0491451a1ae5048c7976c5c4b73cd91401b24de2
 
-    echo "=== Building GPUBackendTools ==="
+    git clone --branch lisa_on_fly \
+        https://github.com/mikekatz04/LISAanalysistools.git \
+        /opt/src/LISAanalysistools
+    git -C /opt/src/LISAanalysistools checkout 6a8ec5c6923aeb6ba32af6694137e94d59c774f0
+
+    git clone --branch tdi_on_fly \
+        https://github.com/mikekatz04/lisa-on-gpu.git \
+        /opt/src/lisa-on-gpu
+    git -C /opt/src/lisa-on-gpu checkout 66fa859dbcb17394b67fc563f47c00466bd14468
+
+    # ── Shared cmake config flags ─────────────────────────────────────────────
+    CMAKE_FLAGS="--no-build-isolation \
+        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} "
+
+    # ── GPUBackendTools ───────────────────────────────────────────────────────
     SETUPTOOLS_SCM_PRETEND_VERSION=0.2.0 \
-    python3 -m pip install . --no-build-isolation \
+    pip install /opt/src/GPUBackendTools ${CMAKE_FLAGS} \
         --config-settings=cmake.define.GBT_WITH_GPU=ON \
-        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} \
         --config-settings=cmake.define.GBT_CUDA_ARCH=70
 
-    # Quick sanity check: both CPU and CUDA 12x backends should be present
-    echo "--- GBT backends ---"
-    python3 -c "
-import importlib
-for mod in ['gpubackendtools_backend_cpu', 'gpubackendtools_backend_cuda12x']:
-    try:
-        importlib.import_module(mod)
-        print(f'  {mod}: OK')
-    except ImportError as e:
-        print(f'  {mod}: MISSING ({e})')
-"
-    cd /opt/src
-
-    # ── 7. LISAanalysistools (lisa_on_fly branch, pinned to commit 6a8ec5c) ──
-    echo ""
-    echo "=== Cloning LISAanalysistools ==="
-    git clone https://github.com/mikekatz04/LISAanalysistools.git
-    cd LISAanalysistools
-    git checkout 6a8ec5c6923aeb6ba32af6694137e94d59c774f0
-
-    echo "=== Building LISAanalysistools ==="
+    # ── LISAanalysistools ─────────────────────────────────────────────────────
     SETUPTOOLS_SCM_PRETEND_VERSION=1.3.0 \
-    python3 -m pip install . --no-build-isolation \
+    pip install /opt/src/LISAanalysistools ${CMAKE_FLAGS} \
         --config-settings=cmake.define.LISATOOLS_WITH_GPU=ON \
-        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} \
         --config-settings=cmake.define.LISATOOLS_CUDA_ARCH=70
 
-    echo "--- LISAtools backends ---"
-    python3 -c "
-import importlib
-for mod in ['lisatools_backend_cpu.pycppdetector',
-            'lisatools_backend_cuda12x.pycppdetector']:
-    try:
-        importlib.import_module(mod)
-        print(f'  {mod}: OK')
-    except ImportError as e:
-        print(f'  {mod}: MISSING ({e})')
-"
-    cd /opt/src
-
-    # ── 8. fastlisaresponse / lisa-on-gpu (tdi_on_fly, pinned to commit 66fa859)
-    echo ""
-    echo "=== Cloning lisa-on-gpu ==="
-    git clone https://github.com/mikekatz04/lisa-on-gpu.git
-    cd lisa-on-gpu
-    git checkout 66fa859dbcb17394b67fc563f47c00466bd14468
-
-    echo "=== Building fastlisaresponse ==="
+    # ── fastlisaresponse ──────────────────────────────────────────────────────
     SETUPTOOLS_SCM_PRETEND_VERSION=1.0.0 \
-    python3 -m pip install . --no-build-isolation \
+    pip install /opt/src/lisa-on-gpu ${CMAKE_FLAGS} \
         --config-settings=cmake.define.FASTLISA_WITH_GPU=ON \
-        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} \
         --config-settings=cmake.define.FASTLISA_CUDA_ARCH=70
-    cd /opt/src
-
-    # ── 9. Full verification ──────────────────────────────────────────────────
-    echo ""
-    echo "=== Full Package Verification ==="
-    python3 - <<'PYEOF'
-import sys
-print(f"Python: {sys.version}\n")
-
-results = []
-
-def check(label, module, attr=None):
-    try:
-        import importlib
-        m = importlib.import_module(module)
-        value = getattr(m, attr) if attr else "OK"
-        results.append((label, True, value))
-    except Exception as e:
-        results.append((label, False, str(e)))
-
-check("gpubackendtools",              "gpubackendtools",              "__version__")
-check("gpubackendtools backend cpu",  "gpubackendtools_backend_cpu")
-check("gpubackendtools backend cu12", "gpubackendtools_backend_cuda12x")
-
-check("lisatools",                    "lisatools",                    "__version__")
-check("lisatools backend cpu",        "lisatools_backend_cpu.pycppdetector")
-check("lisatools backend cu12",       "lisatools_backend_cuda12x.pycppdetector")
-
-check("fastlisaresponse",             "fastlisaresponse",             "__version__")
-
-check("cupy",                         "cupy",                         "__version__")
-check("few",                          "few",                          "__version__")
-
-for label, ok, info in results:
-    status = "OK  " if ok else "FAIL"
-    print(f"  [{status}] {label}: {info}")
-PYEOF
 
 %runscript
-    exec python3.14 "$@"
+    exec python "$@"

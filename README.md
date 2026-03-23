@@ -28,7 +28,7 @@ $ export APPTAINER_TMPDIR=<path/to/large/storage>/apptainer_tmp
 ```
 To build the .sif container image
 ```console
-$ apptainer build --fakeroot lisa_env.sif lisa_env.def
+apptainer build --fakeroot lisa_env.sif lisa_env.def
 ```
 
 That's it to build the container image. To test if the GPU is found correctly by FEW:
