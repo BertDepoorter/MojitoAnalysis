@@ -51,6 +51,8 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
         cuda-nvcc-12-9 \
         pkg-config \
         liblapacke-dev \
+        libcublas-dev-12-9 \
+        libcusparse-dev-12-9 \
         && rm -rf /var/lib/apt/lists/*
 
     # ── PE / inference packages not in the base image ────────────────────────
