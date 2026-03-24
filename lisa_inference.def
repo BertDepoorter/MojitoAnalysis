@@ -49,6 +49,8 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     apt-get update && apt-get install -y --no-install-recommends \
         gfortran \
         cuda-nvcc-12-9 \
+        pkg-config \
+        liblapacke-dev \
         && rm -rf /var/lib/apt/lists/*
 
     # ── PE / inference packages not in the base image ────────────────────────
