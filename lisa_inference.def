@@ -36,23 +36,19 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     export HOME=/root 
 
 %post
-    export CUDA_HOME=/usr/local/cuda-12.2
+    export CUDA_HOME=/usr/local/cuda-12.9
     export CUDACXX=${CUDA_HOME}/bin/nvcc
     export PATH=${CUDA_HOME}/bin:/home/lisauser/miniforge3/bin:${PATH}
     export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
-    
-    export TMPDIR=/scratch/project_2004833/depoorter/tmp                                                                                                                       
-    export PIP_CACHE_DIR=/scratch/project_2004833/depoorter/pip-cache                                                                                                           
+
+    export TMPDIR=/scratch/project_2004833/depoorter/tmp
+    export PIP_CACHE_DIR=/scratch/project_2004833/depoorter/pip-cache
     mkdir -p "${TMPDIR}" "${PIP_CACHE_DIR}"
 
-    # ── Diagnostic: locate nvcc ───────────────────────────────────────────────
-    echo "=== which nvcc ===" && which nvcc 2>/dev/null || echo "nvcc not in PATH"
-    echo "=== find nvcc under /usr/local ===" && find /usr/local -name nvcc 2>/dev/null
-    echo "=== find nvcc under /usr ===" && find /usr -name nvcc 2>/dev/null
-    echo "=== ls /usr/local/cuda* ===" && ls -d /usr/local/cuda* 2>/dev/null
-
-    # ── Fortran compiler required by GPUBackendTools CMake build ─────────────
-    apt-get update && apt-get install -y --no-install-recommends gfortran \
+    # ── Fortran compiler + CUDA toolkit (nvcc) ────────────────────────────────
+    apt-get update && apt-get install -y --no-install-recommends \
+        gfortran \
+        cuda-nvcc-12-9 \
         && rm -rf /var/lib/apt/lists/*
 
     # ── PE / inference packages not in the base image ────────────────────────
