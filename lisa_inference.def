@@ -44,7 +44,13 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     export TMPDIR=/scratch/project_2004833/depoorter/tmp                                                                                                                       
     export PIP_CACHE_DIR=/scratch/project_2004833/depoorter/pip-cache                                                                                                           
     mkdir -p "${TMPDIR}" "${PIP_CACHE_DIR}"
-    
+
+    # ── Diagnostic: locate nvcc ───────────────────────────────────────────────
+    echo "=== which nvcc ===" && which nvcc 2>/dev/null || echo "nvcc not in PATH"
+    echo "=== find nvcc under /usr/local ===" && find /usr/local -name nvcc 2>/dev/null
+    echo "=== find nvcc under /usr ===" && find /usr -name nvcc 2>/dev/null
+    echo "=== ls /usr/local/cuda* ===" && ls -d /usr/local/cuda* 2>/dev/null
+
     # ── Fortran compiler required by GPUBackendTools CMake build ─────────────
     apt-get update && apt-get install -y --no-install-recommends gfortran \
         && rm -rf /var/lib/apt/lists/*
