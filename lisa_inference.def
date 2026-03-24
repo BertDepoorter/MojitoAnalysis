@@ -60,6 +60,7 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     pip install --no-cache-dir scikit-build-core cmake ninja
 
     # ── Clone source repositories at pinned commits ───────────────────────────
+    export HOME=/root
     unset TMPDIR
     git config --global --add safe.directory '*'
     mkdir -p /opt/src
