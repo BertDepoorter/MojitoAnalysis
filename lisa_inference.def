@@ -61,7 +61,7 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
         tqdm lisaconstants "lisaorbits>=3.0.0" \
 
     # ── Build-time dependencies for --no-build-isolation builds ──────────────
-    pip install --no-cache-dir scikit-build-core cmake ninja
+    pip install --no-cache-dir scikit-build-core cmake ninja pybind11
 
     # ── Clone source repositories at pinned commits ───────────────────────────
     export HOME=/root
