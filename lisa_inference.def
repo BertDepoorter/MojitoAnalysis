@@ -82,7 +82,8 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
 
     # ── Shared cmake config flags ─────────────────────────────────────────────
     CMAKE_FLAGS="--no-build-isolation \
-        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} "
+        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} \
+        --config-settings=cmake.define.CUDAToolkit_ROOT=${CUDA_HOME} "
 
     # ── GPUBackendTools ───────────────────────────────────────────────────────
     SETUPTOOLS_SCM_PRETEND_VERSION=0.2.0 \
