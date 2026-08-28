@@ -82,7 +82,7 @@ import os
 
 # change this to dataset location
 if args.cluster == 'vsc':
-    scratch = '/scratch/leuven/367/vsc36785/MojitoLight/SIM_data/brickmarket/mojito_light_v1_0_0/data/EMRI/L1'
+    scratch = '/scratch/leuven/367/vsc36785/MojitoLight/SIM_data/brickmarket/mojito_light_v1_0_0/data/EMRI/L1_0p4Hz'
 elif args.cluster == 'puhti':
     scratch = '/scratch/project_2004833/common_data/mojito/brickmarket/mojito_v1_0_0/data/EMRI/L1_0p4Hz'
 
@@ -555,7 +555,7 @@ burnin = 0 # I always set burnin when I analyse my samples
 d = 0.1
 nwalkers = 40
 ntemps = 1        
-Reset_Backend = True
+Reset_Backend = False
 tempering_kwargs=dict(ntemps=ntemps)  # Sampler requires the number of temperatures as a dictionary
 
 logger.info(f"PE run settings: ")
@@ -657,7 +657,7 @@ data_dir = f'{home_folder}/output/source_{source_index}'
 fp = f"{data_dir}/PE_run_source_{source_index}.h5"
 
 logger.info(f"Backend set up at {fp}")
-
+print(home_folder)
 if Reset_Backend:
     if os.path.exists(fp):
         os.remove(fp) # Manually get rid of backend
@@ -665,10 +665,12 @@ if Reset_Backend:
     
 else:
     # if restarting run, fetch last samples as starting points
+    backend = HDFBackend(fp)
     start = backend.get_last_sample() # Start from last sample
     
 # set up sampler
 logger.info('Setting up sampler')
+breakpoint()
 ensemble = EnsembleSampler(
                             nwalkers,          
                             ndim,
