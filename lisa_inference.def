@@ -33,28 +33,41 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
     export PATH=${CUDA_HOME}/bin:/home/lisauser/miniforge3/bin:${PATH}
     export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
     export GPUBACKENDTOOLS_FORCE_BACKEND=cuda12x
+    export HOME=/root 
 
 %post
-    export CUDA_HOME=/usr/local/cuda-12.2
+    export CUDA_HOME=/usr/local/cuda-12.9
     export CUDACXX=${CUDA_HOME}/bin/nvcc
     export PATH=${CUDA_HOME}/bin:/home/lisauser/miniforge3/bin:${PATH}
     export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
 
-    # ── Fortran compiler required by GPUBackendTools CMake build ─────────────
-    apt-get update && apt-get install -y --no-install-recommends gfortran \
+    export TMPDIR=/scratch/project_2004833/depoorter/tmp
+    export PIP_CACHE_DIR=/scratch/project_2004833/depoorter/pip-cache
+    mkdir -p "${TMPDIR}" "${PIP_CACHE_DIR}"
+
+    # ── Fortran compiler + CUDA toolkit (nvcc) ────────────────────────────────
+    apt-get update && apt-get install -y --no-install-recommends \
+        gfortran \
+        cuda-nvcc-12-9 \
+        pkg-config \
+        liblapacke-dev \
+        libcublas-dev-12-9 \
+        libcusparse-dev-12-9 \
         && rm -rf /var/lib/apt/lists/*
 
     # ── PE / inference packages not in the base image ────────────────────────
-    pip install --no-cache-dir \
+    pip install \
         eryn corner arviz pesummary \
-        fastemriwaveforms==2.0.0 fastemriwaveforms-cuda12x \
+        fastemriwaveforms-cuda12x==2.0.0 \
         setuptools_scm \ 
         tqdm lisaconstants "lisaorbits>=3.0.0" \
 
     # ── Build-time dependencies for --no-build-isolation builds ──────────────
-    pip install --no-cache-dir scikit-build-core cmake ninja
+    pip install --no-cache-dir scikit-build-core cmake ninja pybind11
 
     # ── Clone source repositories at pinned commits ───────────────────────────
+    export HOME=/root
+    unset TMPDIR
     git config --global --add safe.directory '*'
     mkdir -p /opt/src
 
@@ -75,7 +88,8 @@ From: gitlab.esa.int:4567/lisa-sgs/sim/lisasim-bench:feature-init-docker-env-gpu
 
     # ── Shared cmake config flags ─────────────────────────────────────────────
     CMAKE_FLAGS="--no-build-isolation \
-        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} "
+        --config-settings=cmake.define.CMAKE_CUDA_COMPILER=${CUDACXX} \
+        --config-settings=cmake.define.CUDAToolkit_ROOT=${CUDA_HOME} "
 
     # ── GPUBackendTools ───────────────────────────────────────────────────────
     SETUPTOOLS_SCM_PRETEND_VERSION=0.2.0 \
