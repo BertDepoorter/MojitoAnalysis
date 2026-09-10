@@ -3,50 +3,30 @@ Code to validate the Mojito dataset with PE using fast template
 This is also a test for the FEW review.
 '''
 
-# imports
-# imports
+# The GPU backend has to be selected before importing anything built on
+# gpubackendtools (few, lisatools, fastlisaresponse).
 import os
 os.environ["GPUBACKENDTOOLS_FORCE_BACKEND"] = "cuda12x"
 
-from fastlisaresponse import ResponseWrapper
-from fastlisaresponse.tdiconfig import TDIConfig
-from few.waveform import GenerateEMRIWaveform
-from fastlisaresponse.utils.parallelbase import ParallelModuleBase
-from lisatools.detector import Orbits
-from lisaconstants import ASTRONOMICAL_YEAR
+import argparse
+import glob
+import logging
+import warnings
 
+import h5py
 import numpy as np
 import cupy as cp
-import os
-import h5py
 from scipy.signal.windows import tukey
 from scipy.interpolate import CubicSpline
 
-from h5py import File
+from fastlisaresponse import ResponseWrapper
+from fastlisaresponse.tdiconfig import TDIConfig
+from fastlisaresponse.utils.parallelbase import ParallelModuleBase
+from few.waveform import GenerateEMRIWaveform
+from lisatools.detector import Orbits
 from lisaconstants import ASTRONOMICAL_YEAR
 from lisaorbits import OEMOrbits
-
-
-YRSID_SI = ASTRONOMICAL_YEAR
-
-import argparse
-import logging
-import warnings
-warnings.filterwarnings("ignore")
-
-import logging
-# Set logging level to INFO (more verbose and informative)
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-import h5py
-
 from dotenv import load_dotenv
-
-# Load variables from the .env file
-load_dotenv()
-my_password = os.getenv("LISA_CONSORTIUM_KEY")
-my_username = os.getenv("LISA_CONSORTIUM_NAME")
 
 # Import features from eryn
 from eryn.ensemble import EnsembleSampler
@@ -54,8 +34,21 @@ from eryn.moves import StretchMove
 from eryn.prior import ProbDistContainer, uniform_dist
 from eryn.backends import HDFBackend
 # need to install the Mojito package for reading in parameters and data
-from mojito import MojitoL1File   
+from mojito import MojitoL1File
 from mojito.download import get_source_params
+
+YRSID_SI = ASTRONOMICAL_YEAR
+
+warnings.filterwarnings("ignore")
+
+# Set logging level to INFO (more verbose and informative)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Load variables from the .env file
+load_dotenv()
+my_password = os.getenv("LISA_CONSORTIUM_KEY")
+my_username = os.getenv("LISA_CONSORTIUM_NAME")
 
 # read in source index from parser
 parser = argparse.ArgumentParser()
@@ -77,9 +70,6 @@ gpubackendtools:  {gpubackendtools.__version__}
 ''')
 
 # fetch correct dataset
-import glob
-import os
-
 # change this to dataset location
 if args.cluster == 'vsc':
     scratch = '/scratch/leuven/367/vsc36785/MojitoLight/SIM_data/brickmarket/mojito_light_v1_0_0/data/EMRI/L1_0p4Hz'
@@ -291,11 +281,6 @@ tdi_kwargs_esa = dict(
             tdi_chan="XYZ",
         )
 
-check_memory()
-
-def check_memory():
-    free, total = cp.cuda.Device(0).mem_info
-    print(f'Free memory  : {free/1e9:.2f} Gb\nUsed memory  : {(total-free)/1e9:.2f} Gb\nTotal memory : {total/1e9:.2f} Gb\n')
 check_memory()
 
 logger.info("Create time arrays and spline the Mojito data to fastlisaresponse-compatible time array data")
@@ -670,7 +655,6 @@ else:
     
 # set up sampler
 logger.info('Setting up sampler')
-breakpoint()
 ensemble = EnsembleSampler(
                             nwalkers,          
                             ndim,

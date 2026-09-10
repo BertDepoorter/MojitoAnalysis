@@ -10,7 +10,7 @@
      "--home",
      "/scratch/project_2004833/depoorter/tmp",
      "--nv",
-     "/scratch/project_2004833/depoorter/MojitoAnalysis/lisa_env.sif",
+     "/scratch/project_2004833/depoorter/MojitoAnalysis/lisa_inference.sif",
      "python",
      "-m",
      "ipykernel_launcher",
