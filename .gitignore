@@ -1,16 +1,27 @@
+# Data products and figures that are regenerated, not versioned
 *.h5
 *.npz
 *.npy
 *.pdf
 *.jpg
 *.jpeg
-.ipynb_checkpoints/
-*.sif
-core.*
-.env
 data/
-lisa_emri_kernel/
-test_kernel.ipynb
-scripts/
-git_repos/
+
+# Notebook / Python artifacts
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
 Untitled.*
+test_kernel.ipynb
+
+# Containers and local environments
+*.sif
+lisa_emri_kernel/
+git_repos/
+
+# Local secrets and crash dumps
+.env
+core.*
+
+# OS cruft
+.DS_Store
