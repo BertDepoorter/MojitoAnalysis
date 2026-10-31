@@ -27,6 +27,7 @@ dependencies:
       - cupy-cuda12x==13.6.0
       - arviz
       - corner
-      - pesummary
       - segwo 
       - pywavelet
+      - mojito>=0.5.0
+      - dotenv
