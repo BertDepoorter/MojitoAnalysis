@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mojito EMRI Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<link rel="stylesheet" href="style.css">
+<script defer src="app.js"></script>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div>
+      <h1>Mojito EMRI Explorer</h1>
+      <div class="sub">Mojito-Light v1.0.0 · EMRI bricks · L1, 0.4 Hz · signal only</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="chips" id="chips"></div>
+    <button class="iconbtn" id="theme" title="Toggle colour theme">auto</button>
+  </div>
+  <nav>
+    <a href="#params">Parameters</a><a href="#td">Time domain</a><a href="#fd">Frequency domain</a>
+    <a href="#spec">Spectrogram</a><a href="#chains">Posterior</a>
+  </nav>
+</header>
+
+<main>
+  <section class="card" id="params">
+    <div class="card-head"><h2>Source parameters</h2><p id="brick" class="mono"></p></div>
+    <div class="badges" id="badges"></div>
+    <div class="grid2" style="margin-top:14px">
+      <div><h3>Catalog (injection)</h3><table id="tab-cat"></table></div>
+      <div><h3>Derived</h3><table id="tab-der"></table></div>
+    </div>
+  </section>
+
+  <section class="card" id="td" data-lazy="td">
+    <div class="card-head"><h2>Time domain</h2>
+      <p>TDI 2.0 $X,Y,Z$ in fractional frequency, $d_c=c_2/\nu_0$. Min/max envelope; zoom to load samples from the brick.</p></div>
+    <div id="plot-td" class="plot" style="height:560px"></div>
+  </section>
+
+  <section class="card" id="fd" data-lazy="fd">
+    <div class="card-head"><h2>Frequency domain</h2>
+      <p>Signal $h_c(f)=2\sqrt{f}\,|\tilde d_c(f)|$ against the day-averaged one-sided noise $n_c(f)=\sqrt{f\,\bar S_{cc}(f)}$.</p></div>
+    <div id="plot-fd" class="plot" style="height:460px"></div>
+    <p class="caption">With $\tilde d_c=\Delta t\,\mathrm{rfft}(w\,d_c)$ (Tukey, $\alpha=0.01$) the per-channel SNR is
+      $\rho_c^2=4\Delta f\sum_k|\tilde d_c(f_k)|^2/\bar S_{cc}(f_k)=\int (h_c/n_c)^2\,\mathrm{d}\ln f$; the network SNR uses the full covariance,
+      $\rho^2=4\Delta f\,\mathrm{Re}\sum_k\tilde{\mathbf d}^\dagger\mathbf C^{-1}\tilde{\mathbf d}$.</p>
+  </section>
+
+  <section class="card" id="spec" data-lazy="spec">
+    <div class="card-head"><h2>Spectrogram</h2>
+      <p>One-sided PSD $P_c(f,t)$ [Hz$^{-1}$] of the L1 signal (Hann, 22.8 h segments, 50 % overlap), with FEW trajectory tracks $f_{mkn}=|m f_\phi+n f_r|$.</p></div>
+    <div class="grid-side">
+      <div>
+        <div class="controls">
+          <label>Channel <select id="spec-ch"><option>X</option><option>Y</option><option>Z</option></select></label>
+          <label>Colours <select id="spec-cmap"><option>Viridis</option><option>Cividis</option><option>Greens</option></select></label>
+          <label>min <input type="range" id="spec-zmin" step="0.1"></label>
+          <label>max <input type="range" id="spec-zmax" step="0.1"></label>
+          <span class="mono muted" id="spec-zlab"></span>
+        </div>
+        <div id="plot-spec" class="plot" style="height:520px"></div>
+      </div>
+      <div class="side">
+        <h3>FEW trajectory</h3>
+        <div class="form" id="traj-form">
+          <label>$M\,[M_\odot]$</label><input type="number" id="f-M" step="any">
+          <label>$\mu\,[M_\odot]$</label><input type="number" id="f-mu" step="any">
+          <label>$a$</label><input type="number" id="f-a" step="any" min="0" max="0.999">
+          <label>$p_0$</label><input type="number" id="f-p0" step="any">
+          <label>$e_0$</label><input type="number" id="f-e0" step="any" min="0" max="0.9">
+          <label>$x_{I,0}$</label><select id="f-x0"><option value="1">+1</option><option value="-1">−1</option></select>
+          <label>$T$ [yr]</label><input type="number" id="f-T" step="any">
+        </div>
+        <div class="harms" id="harms"></div>
+        <div class="btnrow">
+          <button class="primary" id="btn-track">Compute track</button>
+          <button class="secondary" id="btn-truth">Reset to truth</button>
+          <button class="secondary" id="btn-median" disabled>Posterior median</button>
+          <button class="secondary" id="btn-draw" disabled>Draw from posterior</button>
+        </div>
+        <div class="msg" id="traj-msg"></div>
+        <ul class="tracklist" id="tracklist"></ul>
+        <p class="caption">Parameters are defined at the catalog reference time, 850.5 s before the first L1 sample; the earlier segment is dropped. SSB-frame frequencies, no LISA Doppler.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="chains" data-lazy="chains">
+    <div class="card-head"><h2>Posterior samples</h2><p id="chain-info"></p></div>
+    <div id="chain-body">
+      <div class="controls">
+        <label>Burn-in <input type="range" id="c-burn" min="0" step="1"> <span class="mono" id="c-burn-lab"></span></label>
+        <label>Parameter <select id="c-par"></select></label>
+        <label>Walkers shown <input type="number" id="c-nw" value="10" min="1" style="width:60px"></label>
+        <label>2D pair <select id="c-px"></select> <select id="c-py"></select></label>
+        <label><input type="checkbox" id="c-nothin"> no thinning (debug)</label>
+      </div>
+      <div class="badges" id="chain-badges"></div>
+      <p class="caption" id="chain-tau"></p>
+      <div class="grid2">
+        <div id="plot-trace" class="plot" style="height:420px"></div>
+        <div id="plot-var" class="plot" style="height:420px"></div>
+        <div id="plot-rhat" class="plot" style="height:340px"></div>
+        <div id="plot-2d" class="plot" style="height:340px"></div>
+      </div>
+      <div id="plot-marg" class="plot" style="height:520px"></div>
+      <h3 style="margin-top:12px">Summary (after burn-in, thinned by $\lceil\tau_{\max}\rceil$)</h3>
+      <table id="tab-post"></table>
+    </div>
+  </section>
+</main>
+</body>
+</html>
